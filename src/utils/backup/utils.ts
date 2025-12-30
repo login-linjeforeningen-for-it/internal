@@ -1,12 +1,12 @@
 import config from '#config'
-import { parse } from 'dotenv'
+import { envParse } from 'utilbee/utils'
 import fs from 'fs/promises'
 import path from 'path'
 
 export async function getContainerEnv(workingDir: string) {
     try {
         const envContent = await fs.readFile(path.join(workingDir, '.env'), 'utf-8')
-        return parse(envContent)
+        return envParse(envContent)
     } catch {
         return {}
     }
