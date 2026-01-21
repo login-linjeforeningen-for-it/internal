@@ -32,7 +32,7 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
         }
 
         for (const project of projects) {
-            if (service && project !== service) {
+            if (service && !project.toLowerCase().includes(service.toLowerCase())) {
                 continue
             }
 
@@ -74,7 +74,7 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
                         const parts = obj.Key.split('/')
                         if (parts.length !== 2) continue
                         const [project, filename] = parts
-                        if (service && project !== service) continue
+                        if (service && !project.toLowerCase().includes(service.toLowerCase())) continue
                         if (date && !filename.includes(date.replace(/-/g, ''))) continue
                         files.push({
                             service: project,
