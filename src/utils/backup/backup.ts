@@ -43,8 +43,8 @@ export async function runBackup() {
                 await fs.mkdir(dir, { recursive: true })
 
                 const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
-                const file = path.join(dir, `${DB}_${stamp}.sql`)
-                await execAsync(`docker exec -e PGPASSWORD="${DB_PASSWORD}" ${id} pg_dump -c -U "${DB_USER}" "${DB}" > "${file}"`)
+                const file = path.join(dir, `${DB}_${stamp}.dump`)
+                await execAsync(`docker exec -e PGPASSWORD="${DB_PASSWORD}" ${id} pg_dump -Fc -c -U "${DB_USER}" "${DB}" > "${file}"`)
 
                 if ((await fs.stat(file)).size === 0) {
                     await fs.unlink(file).catch(() => { })

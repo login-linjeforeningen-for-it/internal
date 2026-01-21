@@ -1,10 +1,13 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs/promises'
+import { createWriteStream } from 'fs'
 import path from 'path'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { getBackupDir, getContainerEnv } from '#utils/backup/utils.ts'
 import getPostgresContainers from '#utils/backup/containers.ts'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import config from '#config'
 
 const execAsync = promisify(exec)
 
@@ -46,27 +49,64 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
 
         const backupFilePath = path.join(getBackupDir(project), file)
         
+        let isLocal = true
         try {
             await fs.access(backupFilePath)
         } catch {
-            return res.status(404).send({ error: 'Backup file not found' })
+            if (config.backup.s3 && config.backup.s3.bucket) {
+                const s3 = new S3Client({
+                    endpoint: config.backup.s3.endpoint,
+                    region: config.backup.s3.region,
+                    credentials: {
+                        accessKeyId: config.backup.s3.accessKey,
+                        secretAccessKey: config.backup.s3.secretKey
+                    },
+                    forcePathStyle: true
+                })
+                try {
+                    const command = new GetObjectCommand({
+                        Bucket: config.backup.s3.bucket,
+                        Key: `${project}/${file}`
+                    })
+                    const response = await s3.send(command)
+                    if (response.Body) {
+                        const writeStream = createWriteStream(backupFilePath)
+                        ;(response.Body as any).pipe(writeStream)
+                        await new Promise((resolve, reject) => {
+                            writeStream.on('finish', resolve)
+                            writeStream.on('error', reject)
+                        })
+                        isLocal = false
+                    } else {
+                        return res.status(404).send({ error: 'Backup file not found locally or remotely' })
+                    }
+                } catch (e) {
+                    return res.status(404).send({ error: 'Backup file not found locally or remotely' })
+                }
+            } else {
+                return res.status(404).send({ error: 'Backup file not found' })
+            }
         }
 
         const backupDir = getBackupDir(project)
         await fs.mkdir(backupDir, { recursive: true })
 
         const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
-        const newBackupFile = path.join(backupDir, `${DB}_${stamp}_pre_restore.sql`)
+        const newBackupFile = path.join(backupDir, `${DB}_${stamp}_pre_restore.dump`)
 
-        await execAsync(`docker exec -e PGPASSWORD="${DB_PASSWORD}" ${containerId} pg_dump -c -U "${DB_USER}" "${DB}" > "${newBackupFile}"`)
+        await execAsync(`docker exec -e PGPASSWORD="${DB_PASSWORD}" ${containerId} pg_dump -Fc -c -U "${DB_USER}" "${DB}" > "${newBackupFile}"`)
 
         if ((await fs.stat(newBackupFile)).size === 0) {
             await fs.unlink(newBackupFile).catch(() => { })
             throw new Error('Failed to create pre-restore backup')
         }
 
-        const command = `cat "${backupFilePath}" | docker exec -i -e PGPASSWORD="${DB_PASSWORD}" ${containerId} psql -U "${DB_USER}" -d "${DB}"`
+        const command = `docker exec -i -e PGPASSWORD="${DB_PASSWORD}" ${containerId} pg_restore -U "${DB_USER}" -d "${DB}" < "${backupFilePath}"`
         await execAsync(command)
+
+        if (!isLocal) {
+            await fs.unlink(backupFilePath).catch(() => {})
+        }
 
         res.send({ message: 'Backup restored successfully' })
     } catch (e: any) {

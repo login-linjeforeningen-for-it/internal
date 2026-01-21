@@ -3,6 +3,7 @@ import path from 'path'
 import config from '#config'
 import { formatSize } from '#utils/format.ts'
 import { getBackupDir } from '#utils/backup/utils.ts'
+import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 type GetBackupFilesProps = {
@@ -15,7 +16,20 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
 
     try {
         const projects = await fs.readdir(config.backup.path).catch(() => [])
-        const files: { service: string, file: string, size: string, mtime: string }[] = []
+        const files: { service: string, file: string, size: string, mtime: string, location: 'local' | 'remote' }[] = []
+
+        let s3: S3Client | null = null
+        if (config.backup.s3 && config.backup.s3.endpoint && config.backup.s3.bucket) {
+            s3 = new S3Client({
+                endpoint: config.backup.s3.endpoint,
+                region: config.backup.s3.region,
+                credentials: {
+                    accessKeyId: config.backup.s3.accessKey,
+                    secretAccessKey: config.backup.s3.secretKey
+                },
+                forcePathStyle: true
+            })
+        }
 
         for (const project of projects) {
             if (service && project !== service) {
@@ -41,9 +55,38 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
                         service: project,
                         file,
                         size: formatSize(fileStat.size),
-                        mtime: new Date(fileStat.mtimeMs).toISOString()
+                        mtime: new Date(fileStat.mtimeMs).toISOString(),
+                        location: 'local'
                     })
                 }
+            }
+        }
+
+        if (s3 && config.backup.s3.bucket) {
+            try {
+                const command = new ListObjectsV2Command({
+                    Bucket: config.backup.s3.bucket
+                })
+                const response = await s3.send(command)
+                if (response.Contents) {
+                    for (const obj of response.Contents) {
+                        if (!obj.Key || !obj.LastModified || !obj.Size) continue
+                        const parts = obj.Key.split('/')
+                        if (parts.length !== 2) continue
+                        const [project, filename] = parts
+                        if (service && project !== service) continue
+                        if (date && !filename.includes(date.replace(/-/g, ''))) continue
+                        files.push({
+                            service: project,
+                            file: filename,
+                            size: formatSize(obj.Size),
+                            mtime: obj.LastModified.toISOString(),
+                            location: 'remote'
+                        })
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to list S3 files:', e)
             }
         }
 
