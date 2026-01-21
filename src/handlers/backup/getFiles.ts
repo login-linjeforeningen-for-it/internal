@@ -50,7 +50,7 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
 
                 const filePath = path.join(projectDir, file)
                 const fileStat = await fs.stat(filePath).catch(() => null)
-                if (fileStat && fileStat.isFile()) {
+                if (fileStat && fileStat.isFile() && fileStat.size > 0) {
                     files.push({
                         service: project,
                         file,
@@ -70,7 +70,7 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
                 const response = await s3.send(command)
                 if (response.Contents) {
                     for (const obj of response.Contents) {
-                        if (!obj.Key || !obj.LastModified || !obj.Size) continue
+                        if (!obj.Key || !obj.LastModified || !obj.Size || obj.Size <= 0) continue
                         const parts = obj.Key.split('/')
                         if (parts.length !== 2) continue
                         const [project, filename] = parts
