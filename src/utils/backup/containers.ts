@@ -13,31 +13,37 @@ type PostgresContainer = {
 }
 
 export default async function getPostgresContainers(options: { all?: boolean, filterId?: string, filterProject?: string } = {}): Promise<PostgresContainer[]> {
-    const format = '{{.ID}}|{{.Names}}|{{.Config.Image}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.working_dir"}}|{{.Status}}'
-    
-    let cmd = 'docker ps'
+    let psCmd = 'docker ps -q'
     if (options.all || options.filterId || options.filterProject) {
-        cmd += ' -a'
+        psCmd += ' -a'
     }
     
     if (options.filterId) {
-        cmd += ` --filter "id=${options.filterId}"`
+        psCmd += ` --filter "id=${options.filterId}"`
     }
     if (options.filterProject) {
-        cmd += ` --filter "label=com.docker.compose.project=${options.filterProject}"`
+        psCmd += ` --filter "label=com.docker.compose.project=${options.filterProject}"`
     }
     if (!options.filterId && !options.filterProject && !options.all) {
-        cmd += ' --filter "label=com.docker.compose.project"'
+        psCmd += ' --filter "label=com.docker.compose.project"'
     }
 
-    cmd += ` --format '${format}'`
+    const cmd = `docker inspect $(${psCmd}) --format '{{.Id}}|{{.Name}}|{{.Config.Image}}|{{.State.Status}}|{{index .Config.Labels "com.docker.compose.project"}}|{{index .Config.Labels "com.docker.compose.project.working_dir"}}'`
 
     const { stdout } = await execAsync(cmd)
 
     return stdout.split('\n')
-        .filter(l => l.trim() !== '' && l.toLowerCase().includes('postgres'))
+        .filter(l => l.trim() !== '')
         .map(line => {
-            const [id, name, image, project, workingDir, status] = line.split('|')
-            return { id, name, image, project, workingDir, status }
+            const [id, name, image, status, project, workingDir] = line.split('|')
+            return { 
+                id: id.substring(0, 12),
+                name: name.startsWith('/') ? name.substring(1) : name,
+                image,
+                project: project || '',
+                workingDir: workingDir || '',
+                status
+            }
         })
+        .filter(c => c.image.toLowerCase().includes('postgres'))
 }
