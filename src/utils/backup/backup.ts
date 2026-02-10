@@ -57,7 +57,8 @@ export async function runBackup() {
                         await s3.send(new PutObjectCommand({
                             Bucket: config.backup.s3.bucket,
                             Key: `${project}/${path.basename(file)}`,
-                            Body: createReadStream(file)
+                            Body: createReadStream(file),
+                            StorageClass: 'STANDARD_IA'
                         }))
                         console.log(`\tUploaded to S3: ${project}/${path.basename(file)}`)
                     } catch (e: any) {
