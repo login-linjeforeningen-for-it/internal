@@ -13,6 +13,8 @@ import triggerBackup from './handlers/backup/trigger.ts'
 import preHandler from '#utils/auth/authMiddleware.ts'
 import getDatabaseCount from './handlers/backup/getCount.ts'
 import getDashboardStats from './handlers/stats/getDashboard.ts'
+import getVulnerabilities from './handlers/vulnerabilities/get.ts'
+import runVulnerabilityScan from './handlers/vulnerabilities/post.ts'
 
 export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPluginOptions) {
     // index
@@ -37,4 +39,8 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // stats
     fastify.get('/stats', { preHandler }, getServerStats)
     fastify.get('/stats/dashboard', { preHandler }, getDashboardStats)
+
+    // vulnerabilities
+    fastify.get('/vulnerabilities', { preHandler }, getVulnerabilities)
+    fastify.post('/vulnerabilities/scan', { preHandler }, runVulnerabilityScan)
 }

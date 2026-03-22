@@ -1,3 +1,4 @@
+import path from 'path'
 import { envLoad } from 'utilbee'
 
 envLoad({ path: ['.env', '../.env'] })
@@ -37,6 +38,10 @@ const config = {
             bucket: process.env.S3_BUCKET || '',
             region: process.env.S3_REGION || ''
         }
+    },
+    vulnerability: {
+        path: path.join(process.cwd(), 'data', 'vulnerabilities.json'),
+        schedule: '0 14 * * *'
     }
 }
 
