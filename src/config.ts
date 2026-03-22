@@ -41,7 +41,7 @@ const config = {
     },
     vulnerability: {
         path: path.join(process.cwd(), 'data', 'vulnerabilities.json'),
-        schedule: '0 14 * * *'
+        schedule: '0 2 * * *'
     }
 }
 
