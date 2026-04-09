@@ -3,19 +3,34 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { promisify } from 'util'
 
 const execAsync = promisify(exec)
+const DOCKER_EXEC_OPTIONS = { maxBuffer: 8 * 1024 * 1024 }
+const DOCKER_LOG_TAIL = 500
+
+function sanitizeDockerId(id: string) {
+    return id.replace(/[^a-zA-Z0-9_.-]/g, '')
+}
 
 export default async function getDockerContainer(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
+    const safeId = sanitizeDockerId(id)
+
+    if (!safeId) {
+        return res.status(400).send({ error: 'Invalid container id' })
+    }
 
     try {
         const { stdout } = await execAsync(
-            `docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}"`
+            `docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}"`,
+            DOCKER_EXEC_OPTIONS
         )
 
-        const { stdout: inspectOut } = await execAsync(`docker inspect ${id}`)
+        const { stdout: inspectOut } = await execAsync(`docker inspect ${safeId}`, DOCKER_EXEC_OPTIONS)
         const details = JSON.parse(inspectOut)[0]
 
-        const { stdout: logsOut } = await execAsync(`docker logs ${id}`)
+        const { stdout: logsOut } = await execAsync(
+            `docker logs --tail ${DOCKER_LOG_TAIL} ${safeId}`,
+            DOCKER_EXEC_OPTIONS
+        )
         const logs = logsOut.split('\n').filter(Boolean)
         const lines = stdout.split('\n').filter(Boolean)
         const containers = lines.map(line => {
@@ -23,7 +38,7 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
             return { id: cid, name, status, uptime }
         })
 
-        const container = containers.find(c => c.id.startsWith(id))
+        const container = containers.find(c => c.id.startsWith(safeId))
         if (!container) {
             return res.status(404).send({ error: "Container not found" })
         }
