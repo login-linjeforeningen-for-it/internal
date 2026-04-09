@@ -16,12 +16,26 @@ export interface VulnerabilityGroup {
     severity: SeverityCount
 }
 
+export interface VulnerabilityDetail {
+    id: string
+    title: string
+    severity: SeverityLevel
+    source: string
+    packageName: string | null
+    packageType: string | null
+    installedVersion: string | null
+    fixedVersion: string | null
+    description: string | null
+    references: string[]
+}
+
 export interface ImageVulnerabilityReport {
     image: string
     scannedAt: string
     totalVulnerabilities: number
     severity: SeverityCount
     groups: VulnerabilityGroup[]
+    vulnerabilities: VulnerabilityDetail[]
     scanError: string | null
 }
 
@@ -207,6 +221,103 @@ function extractSource(vulnerability: any): string {
     return 'unknown'
 }
 
+function extractVulnerabilityId(vulnerability: any): string {
+    return firstString([
+        vulnerability?.id,
+        vulnerability?.vulnerability?.id,
+        vulnerability?.cve,
+        vulnerability?.advisory,
+        vulnerability?.name,
+    ]) || 'unknown'
+}
+
+function extractTitle(vulnerability: any): string {
+    return firstString([
+        vulnerability?.title,
+        vulnerability?.name,
+        vulnerability?.message,
+        vulnerability?.description,
+        vulnerability?.summary,
+        vulnerability?.vulnerability?.summary,
+        vulnerability?.vulnerability?.description,
+        extractVulnerabilityId(vulnerability),
+    ]) || 'Untitled vulnerability'
+}
+
+function extractPackageName(vulnerability: any): string | null {
+    const packageObject = vulnerability?.package || vulnerability?.artifact || vulnerability?.component || {}
+    const locationObject = vulnerability?.location || {}
+    const dependencyObject = locationObject?.dependency || {}
+    const dependencyPackageObject = dependencyObject?.package || {}
+
+    return firstString([
+        packageObject?.name,
+        packageObject?.package_name,
+        dependencyPackageObject?.name,
+        dependencyObject?.name,
+        vulnerability?.packageName,
+        vulnerability?.package,
+    ])
+}
+
+function extractPackageType(vulnerability: any): string | null {
+    const packageObject = vulnerability?.package || vulnerability?.artifact || vulnerability?.component || {}
+
+    return firstString([
+        packageObject?.ecosystem,
+        packageObject?.type,
+        packageObject?.manager,
+        vulnerability?.ecosystem,
+        vulnerability?.packageType,
+    ])
+}
+
+function extractInstalledVersion(vulnerability: any): string | null {
+    const packageObject = vulnerability?.package || vulnerability?.artifact || vulnerability?.component || {}
+
+    return firstString([
+        packageObject?.version,
+        packageObject?.installedVersion,
+        vulnerability?.installedVersion,
+        vulnerability?.version,
+    ])
+}
+
+function extractFixedVersion(vulnerability: any): string | null {
+    const packageObject = vulnerability?.package || vulnerability?.artifact || vulnerability?.component || {}
+    const fixObject = vulnerability?.fix || vulnerability?.fixedIn || {}
+
+    return firstString([
+        vulnerability?.fixedVersion,
+        fixObject?.version,
+        fixObject?.versions?.[0],
+        packageObject?.fixedVersion,
+        Array.isArray(vulnerability?.fixedVersion) ? vulnerability.fixedVersion[0] : null,
+    ])
+}
+
+function extractDescription(vulnerability: any): string | null {
+    return firstString([
+        vulnerability?.description,
+        vulnerability?.summary,
+        vulnerability?.message,
+        vulnerability?.vulnerability?.description,
+        vulnerability?.vulnerability?.summary,
+    ])
+}
+
+function extractReferences(vulnerability: any): string[] {
+    const references = [
+        ...(Array.isArray(vulnerability?.links) ? vulnerability.links : []),
+        ...(Array.isArray(vulnerability?.references) ? vulnerability.references : []),
+        ...(Array.isArray(vulnerability?.urls) ? vulnerability.urls : []),
+    ]
+
+    return Array.from(new Set(
+        references.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    )).slice(0, 5)
+}
+
 function collectVulnerabilities(raw: any): any[] {
     if (Array.isArray(raw)) return raw
     if (Array.isArray(raw?.vulnerabilities)) return raw.vulnerabilities
@@ -247,6 +358,7 @@ async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
         const vulnerabilities = collectVulnerabilities(parsed)
         const totalSeverity = emptySeverityCount()
         const grouped = new Map<string, VulnerabilityGroup>()
+        const details: VulnerabilityDetail[] = []
 
         for (const vulnerability of vulnerabilities) {
             const severity = extractSeverity(vulnerability)
@@ -267,9 +379,26 @@ async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
 
             group.total += 1
             group.severity[severity] += 1
+
+            details.push({
+                id: extractVulnerabilityId(vulnerability),
+                title: extractTitle(vulnerability),
+                severity,
+                source,
+                packageName: extractPackageName(vulnerability),
+                packageType: extractPackageType(vulnerability),
+                installedVersion: extractInstalledVersion(vulnerability),
+                fixedVersion: extractFixedVersion(vulnerability),
+                description: extractDescription(vulnerability),
+                references: extractReferences(vulnerability),
+            })
         }
 
         const groups = Array.from(grouped.values()).sort((a, b) => b.total - a.total)
+        const sortedDetails = details.sort((a, b) => {
+            const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, unknown: 4 }
+            return severityOrder[a.severity] - severityOrder[b.severity]
+        })
 
         return {
             image,
@@ -277,6 +406,7 @@ async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
             totalVulnerabilities: vulnerabilities.length,
             severity: totalSeverity,
             groups,
+            vulnerabilities: sortedDetails,
             scanError: null
         }
     } catch (error: any) {
@@ -286,6 +416,7 @@ async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
             totalVulnerabilities: 0,
             severity: emptySeverityCount(),
             groups: [],
+            vulnerabilities: [],
             scanError: formatScanError(error)
         }
     } finally {
@@ -351,7 +482,16 @@ export function triggerDockerScoutScanInBackground(): {
 export async function loadVulnerabilityReport(): Promise<VulnerabilityReportFile> {
     try {
         const content = await fs.readFile(config.vulnerability.path, 'utf8')
-        return JSON.parse(content) as VulnerabilityReportFile
+        const parsed = JSON.parse(content) as VulnerabilityReportFile
+        return {
+            ...parsed,
+            images: Array.isArray(parsed.images)
+                ? parsed.images.map((image) => ({
+                    ...image,
+                    vulnerabilities: Array.isArray(image.vulnerabilities) ? image.vulnerabilities : []
+                }))
+                : []
+        }
     } catch {
         return {
             generatedAt: null,
