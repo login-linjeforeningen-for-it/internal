@@ -51,6 +51,10 @@ export interface DockerScoutScanStatus {
     finishedAt: string | null
     lastSuccessAt: string | null
     lastError: string | null
+    totalImages: number | null
+    completedImages: number
+    currentImage: string | null
+    estimatedCompletionAt: string | null
 }
 
 let activeScan: Promise<VulnerabilityReportFile> | null = null
@@ -59,7 +63,29 @@ let scanStatus: DockerScoutScanStatus = {
     startedAt: null,
     finishedAt: null,
     lastSuccessAt: null,
-    lastError: null
+    lastError: null,
+    totalImages: null,
+    completedImages: 0,
+    currentImage: null,
+    estimatedCompletionAt: null,
+}
+
+function getEstimatedCompletionAt(startedAt: string, completedImages: number, totalImages: number): string | null {
+    if (completedImages <= 0 || totalImages <= 0 || completedImages >= totalImages) {
+        return null
+    }
+
+    const startedAtMs = new Date(startedAt).getTime()
+    const nowMs = Date.now()
+    const elapsedMs = nowMs - startedAtMs
+    if (elapsedMs <= 0) {
+        return null
+    }
+
+    const averagePerImageMs = elapsedMs / completedImages
+    const remainingImages = totalImages - completedImages
+
+    return new Date(nowMs + averagePerImageMs * remainingImages).toISOString()
 }
 
 function emptySeverityCount(): SeverityCount {
@@ -445,7 +471,11 @@ export function triggerDockerScoutScanInBackground(): {
         isRunning: true,
         startedAt,
         finishedAt: null,
-        lastError: null
+        lastError: null,
+        totalImages: null,
+        completedImages: 0,
+        currentImage: null,
+        estimatedCompletionAt: null,
     }
 
     activeScan = runDockerScoutScan()
@@ -453,14 +483,18 @@ export function triggerDockerScoutScanInBackground(): {
             scanStatus = {
                 ...scanStatus,
                 lastSuccessAt: report.generatedAt,
-                lastError: null
+                lastError: null,
+                currentImage: null,
+                estimatedCompletionAt: null,
             }
             return report
         })
         .catch((error: any) => {
             scanStatus = {
                 ...scanStatus,
-                lastError: formatScanError(error)
+                lastError: formatScanError(error),
+                currentImage: null,
+                estimatedCompletionAt: null,
             }
             throw error
         })
@@ -468,7 +502,8 @@ export function triggerDockerScoutScanInBackground(): {
             scanStatus = {
                 ...scanStatus,
                 isRunning: false,
-                finishedAt: new Date().toISOString()
+                finishedAt: new Date().toISOString(),
+                currentImage: null,
             }
             activeScan = null
         })
@@ -505,9 +540,34 @@ export async function runDockerScoutScan(): Promise<VulnerabilityReportFile> {
     const images = await getUniqueRunningImages()
     const scanned: ImageVulnerabilityReport[] = []
 
+    scanStatus = {
+        ...scanStatus,
+        totalImages: images.length,
+        completedImages: 0,
+        currentImage: images[0] || null,
+        estimatedCompletionAt: null,
+    }
+
     for (const image of images) {
+        scanStatus = {
+            ...scanStatus,
+            currentImage: image,
+            estimatedCompletionAt: scanStatus.startedAt
+                ? getEstimatedCompletionAt(scanStatus.startedAt, scanStatus.completedImages, images.length)
+                : null,
+        }
+
         const result = await scanImage(image)
         scanned.push(result)
+
+        scanStatus = {
+            ...scanStatus,
+            completedImages: scanned.length,
+            currentImage: scanned.length < images.length ? images[scanned.length] : null,
+            estimatedCompletionAt: scanStatus.startedAt
+                ? getEstimatedCompletionAt(scanStatus.startedAt, scanned.length, images.length)
+                : null,
+        }
     }
 
     const report: VulnerabilityReportFile = {
