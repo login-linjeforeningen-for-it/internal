@@ -6,6 +6,7 @@ import getServerStats from './handlers/stats/get.ts'
 import restartServiceHandler from './handlers/docker/restartService.ts'
 import getIngress from './handlers/nginx/getIngress.ts'
 import getDockerContainer from './handlers/docker/getContainer.ts'
+import getDockerLogs from './handlers/docker/getLogs.ts'
 import getBackupStats from './handlers/backup/get.ts'
 import getBackupFiles from './handlers/backup/getFiles.ts'
 import restoreBackup from './handlers/backup/post.ts'
@@ -15,6 +16,7 @@ import getDatabaseCount from './handlers/backup/getCount.ts'
 import getDashboardStats from './handlers/stats/getDashboard.ts'
 import getVulnerabilities from './handlers/vulnerabilities/get.ts'
 import runVulnerabilityScan from './handlers/vulnerabilities/post.ts'
+import getDatabaseOverview from './handlers/db/get.ts'
 
 export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPluginOptions) {
     // index
@@ -23,6 +25,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // docker
     fastify.get('/docker', { preHandler }, getDockerContainers)
     fastify.get('/docker/:id', { preHandler }, getDockerContainer)
+    fastify.get('/docker/logs', { preHandler }, getDockerLogs)
     fastify.get('/docker/restart/:id', { preHandler }, restartHandler)
     fastify.get('/docker/restart/service/:id', { preHandler }, restartServiceHandler)
 
@@ -30,6 +33,7 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/backup', { preHandler }, getBackupStats)
     fastify.post('/backup', { preHandler }, triggerBackup)
     fastify.get('/databases', { preHandler }, getDatabaseCount)
+    fastify.get('/db', { preHandler }, getDatabaseOverview)
     fastify.get('/backup/files', { preHandler }, getBackupFiles)
     fastify.post('/backup/restore', { preHandler }, restoreBackup)
 

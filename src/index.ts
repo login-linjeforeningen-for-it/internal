@@ -9,11 +9,35 @@ import backupScheduler from './plugins/backupScheduler.ts'
 import vulnerabilityScheduler from './plugins/vulnerabilityScheduler.ts'
 import fs from 'fs'
 import path from 'path'
+import { installJsonConsoleLogger, log } from './utils/jsonLogger.ts'
 
 process.env.TZ = 'Europe/Oslo'
+installJsonConsoleLogger()
 
 const fastify = Fastify({
-    logger: true
+    logger: {
+        level: process.env.LOG_LEVEL ?? 'info',
+        base: {
+            service: 'internal_api',
+            runtime: 'api',
+            environment: process.env.NODE_ENV ?? 'development',
+        },
+        redact: {
+            paths: [
+                'req.headers.authorization',
+                'req.headers.cookie',
+                'req.headers.x-auth-request-access-token',
+                'req.headers.x-auth-request-token',
+            ],
+            censor: '[REDACTED]'
+        },
+        timestamp: () => `,"time":"${new Date().toISOString()}"`,
+        formatters: {
+            level(label) {
+                return { level: label }
+            }
+        }
+    }
 })
 
 fastify.register(websocketPlugin)
@@ -35,6 +59,10 @@ fastify.get('/favicon.ico', getFavicon)
 async function start() {
     try {
         await fastify.listen({ port, host: '0.0.0.0' })
+        log('info', 'Internal API started', {
+            event: 'api.started',
+            port,
+        })
     } catch (err) {
         fastify.log.error(err)
         process.exit(1)

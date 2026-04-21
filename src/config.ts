@@ -25,18 +25,21 @@ const env = Object.fromEntries(
 )
 
 const config = {
-    userinfo: 'https://authentik.login.no/application/o/userinfo/',
+    userinfo: env.AUTHENTIK_USERINFO_URL
+        || (env.AUTHENTIK_URL
+            ? `${env.AUTHENTIK_URL}/application/o/userinfo/`
+            : 'https://authentik.login.no/application/o/userinfo/'),
     tekkom: 'TekKom',
     backup: {
         path: '/home/dev/backups',
         schedule: '0 22 * * *',
         retention: 7,
         s3: {
-            endpoint: process.env.S3_ENDPOINT || '',
-            accessKey: process.env.S3_ACCESS_KEY || '',
-            secretKey: process.env.S3_SECRET_KEY || '',
-            bucket: process.env.S3_BUCKET || '',
-            region: process.env.S3_REGION || ''
+            endpoint: env.S3_ENDPOINT || '',
+            accessKey: env.S3_ACCESS_KEY || '',
+            secretKey: env.S3_SECRET_KEY || '',
+            bucket: env.S3_BUCKET || '',
+            region: env.S3_REGION || ''
         }
     },
     vulnerability: {

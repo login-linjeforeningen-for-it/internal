@@ -1,13 +1,13 @@
 {
   "name": "internal",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Internal API for Login - Linjeforeningen for IT",
   "license": "ISC",
   "author": "TekKom",
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "start": "node src/index.ts"
+    "start": "bun src/index.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1030.0",
