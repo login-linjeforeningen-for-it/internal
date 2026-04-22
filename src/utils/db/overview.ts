@@ -4,6 +4,8 @@ import getPostgresContainers from '#utils/backup/containers.ts'
 import { getContainerEnv } from '#utils/backup/utils.ts'
 
 const execAsync = promisify(exec)
+const FIELD_SEPARATOR = '\u001f'
+const RECORD_SEPARATOR = '\u001e'
 
 type QueryableContainer = Awaited<ReturnType<typeof getPostgresContainers>>[number]
 
@@ -138,20 +140,21 @@ async function runPsql({
         `-U ${shellEscape(credentials.DB_USER)}`,
         `-d ${shellEscape(database)}`,
         '-At',
-        `-F ${shellEscape('\t')}`,
+        `-F ${shellEscape(FIELD_SEPARATOR)}`,
+        `-R ${shellEscape(RECORD_SEPARATOR)}`,
         `-c ${shellEscape(sql)}`,
     ].join(' ')
 
     const { stdout } = await execAsync(command, { maxBuffer: 20 * 1024 * 1024 })
     return stdout
-        .split('\n')
-        .map(line => line.trim())
+        .split(RECORD_SEPARATOR)
+        .map(line => line.replace(/\s+$/g, ''))
         .filter(Boolean)
 }
 
 function rowsToObjects(lines: string[], keys: string[]) {
     return lines.map((line) => {
-        const values = line.split('\t')
+        const values = line.split(FIELD_SEPARATOR)
         return Object.fromEntries(keys.map((key, index) => [key, values[index] ?? '']))
     })
 }
