@@ -1,5 +1,6 @@
 import getContainers from '#utils/containers/getContainers.ts'
 import parseLogLine from '#utils/containers/parseLogLine.ts'
+import { getDeployTargets } from '#utils/deploy/targets.ts'
 import normalizeText from '#utils/normalize.ts'
 import sanitize from '#utils/sanitize.ts'
 import { exec } from 'child_process'
@@ -22,6 +23,15 @@ type LogQuery = {
     search?: string
     level?: 'all' | 'error'
     tail?: string
+}
+
+type LogSource = {
+    id: string
+    name: string
+    service: string
+    status: string
+    raw: string
+    sourceType: 'container' | 'journal' | 'file' | 'history' | 'deployment'
 }
 
 export default async function getDockerLogs(req: FastifyRequest, res: FastifyReply) {
@@ -55,6 +65,7 @@ export default async function getDockerLogs(req: FastifyRequest, res: FastifyRep
                 name: item.name,
                 service: item.project || item.name.split('_')[0] || item.name,
                 status: item.status,
+                sourceType: 'container' as const,
                 matchedLines: entries.length,
                 entries
             }
@@ -137,6 +148,17 @@ function getHistoryCandidates() {
     ]
 }
 
+function readFirstExistingFile(paths: string[], tail: number) {
+    for (const path of paths) {
+        const content = readTailFile(path, tail)
+        if (content) {
+            return content
+        }
+    }
+
+    return ''
+}
+
 async function getHostLogSources({
     tail,
     level,
@@ -152,6 +174,19 @@ async function getHostLogSources({
     const syslog = existsSync('/var/log/syslog')
         ? readTailFile('/var/log/syslog', tail)
         : readTailFile('/var/log/messages', tail)
+    const nginxErrorLog = readFirstExistingFile([
+        '/var/log/nginx/error.log',
+        '/opt/homebrew/var/log/nginx/error.log',
+        '/usr/local/var/log/nginx/error.log',
+    ], tail)
+    const nginxAccessLog = readFirstExistingFile([
+        '/var/log/nginx/access.log',
+        '/opt/homebrew/var/log/nginx/access.log',
+        '/usr/local/var/log/nginx/access.log',
+    ], tail)
+    const fail2banLog = readFirstExistingFile([
+        '/var/log/fail2ban.log',
+    ], tail)
     const history = getHistoryCandidates()
         .map(path => readTailFile(path, Math.max(50, Math.floor(tail / 2))))
         .filter(Boolean)
@@ -159,14 +194,26 @@ async function getHostLogSources({
 
     const journal = await safeExec(`journalctl -p err --since "24 hours ago" --no-pager -n ${tail} -o short-iso`)
     const sshJournal = await safeExec(`journalctl --since "7 days ago" --no-pager -n ${tail} -u ssh -u sshd -o short-iso`)
+    const dockerJournal = await safeExec(`journalctl --since "24 hours ago" --no-pager -n ${tail} -u docker -o short-iso`)
+    const kernelJournal = await safeExec(`journalctl -k --since "24 hours ago" --no-pager -n ${tail} -o short-iso`)
+    const fail2banJournal = await safeExec(`journalctl --since "7 days ago" --no-pager -n ${tail} -u fail2ban -o short-iso`)
+    const deploySources = await Promise.all(getDeployTargets().map(async (target) => ({
+        id: `deploy-${target.id}`,
+        name: `${target.name} deploy`,
+        service: target.id,
+        status: 'systemd',
+        sourceType: 'deployment' as const,
+        raw: await safeExec(`journalctl --since "7 days ago" --no-pager -n ${tail} -u login-deploy@${target.id}.service -o short-iso`),
+    })))
 
-    const sources = [
+    const sources: LogSource[] = [
         {
             id: 'host-journal',
             name: 'System journal',
             service: 'host',
             status: 'systemd',
             raw: journal,
+            sourceType: 'journal',
         },
         {
             id: 'host-syslog',
@@ -174,20 +221,71 @@ async function getHostLogSources({
             service: 'host',
             status: 'file',
             raw: syslog,
+            sourceType: 'file',
         },
         {
             id: 'host-auth',
             name: 'Authentication log',
-            service: 'ssh',
+            service: 'security',
             status: 'file',
             raw: authLog,
+            sourceType: 'file',
         },
         {
             id: 'host-ssh-journal',
             name: 'SSH journal',
-            service: 'ssh',
+            service: 'security',
             status: 'systemd',
             raw: sshJournal,
+            sourceType: 'journal',
+        },
+        {
+            id: 'host-docker-journal',
+            name: 'Docker daemon journal',
+            service: 'docker',
+            status: 'systemd',
+            raw: dockerJournal,
+            sourceType: 'journal',
+        },
+        {
+            id: 'host-kernel-journal',
+            name: 'Kernel journal',
+            service: 'kernel',
+            status: 'systemd',
+            raw: kernelJournal,
+            sourceType: 'journal',
+        },
+        {
+            id: 'host-nginx-error',
+            name: 'Nginx error log',
+            service: 'nginx',
+            status: 'file',
+            raw: nginxErrorLog,
+            sourceType: 'file',
+        },
+        {
+            id: 'host-nginx-access',
+            name: 'Nginx access log',
+            service: 'nginx',
+            status: 'file',
+            raw: nginxAccessLog,
+            sourceType: 'file',
+        },
+        {
+            id: 'host-fail2ban',
+            name: 'Fail2ban log',
+            service: 'security',
+            status: 'file',
+            raw: fail2banLog,
+            sourceType: 'file',
+        },
+        {
+            id: 'host-fail2ban-journal',
+            name: 'Fail2ban journal',
+            service: 'security',
+            status: 'systemd',
+            raw: fail2banJournal,
+            sourceType: 'journal',
         },
         {
             id: 'host-history',
@@ -195,7 +293,9 @@ async function getHostLogSources({
             service: 'shell',
             status: 'history',
             raw: history,
+            sourceType: 'history',
         },
+        ...deploySources,
     ]
 
     return sources.map(source => {
@@ -205,6 +305,7 @@ async function getHostLogSources({
             name: source.name,
             service: source.service,
             status: source.status,
+            sourceType: source.sourceType,
             matchedLines: entries.length,
             entries,
         }

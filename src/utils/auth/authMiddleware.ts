@@ -13,7 +13,41 @@ declare module 'fastify' {
     }
 }
 
+function getDevUser() {
+    if (process.env.NODE_ENV === 'production' || !process.env.DEV_AUTH_USER_JSON) {
+        return null
+    }
+
+    try {
+        const parsed = JSON.parse(process.env.DEV_AUTH_USER_JSON) as {
+            id?: string
+            name?: string
+            email?: string
+            groups?: string[]
+        }
+
+        if (!parsed.id || !parsed.name || !parsed.email) {
+            return null
+        }
+
+        return {
+            id: parsed.id,
+            name: parsed.name,
+            email: parsed.email,
+            groups: parsed.groups || []
+        }
+    } catch {
+        return null
+    }
+}
+
 export default async function preHandler(req: FastifyRequest, res: FastifyReply) {
+    const devUser = getDevUser()
+    if (devUser && ['127.0.0.1', '::1'].includes(req.ip)) {
+        req.user = devUser
+        return
+    }
+
     const tokenResult = await validateToken(req, res)
     if (!tokenResult.valid || !tokenResult.userInfo || !tokenResult.userInfo.sub) {
         return res.status(401).send({ error: tokenResult.error || 'Invalid user information' })

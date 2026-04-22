@@ -1,0 +1,10 @@
+[Unit]
+Description=Automatic deploy timer for %i
+
+[Timer]
+OnBootSec=2m
+OnUnitInactiveSec=5m
+Unit=login-deploy@%i.service
+
+[Install]
+WantedBy=timers.target

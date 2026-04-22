@@ -1,6 +1,7 @@
 import { exec } from 'child_process'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { promisify } from 'util'
+import { getDeploymentStatus } from '#utils/deploy/status.ts'
 
 const execAsync = promisify(exec)
 const DOCKER_EXEC_OPTIONS = { maxBuffer: 8 * 1024 * 1024 }
@@ -20,7 +21,7 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
 
     try {
         const { stdout } = await execAsync(
-            `docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}"`,
+            `docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}|{{.Label "com.docker.compose.project"}}"`,
             DOCKER_EXEC_OPTIONS
         )
 
@@ -34,8 +35,8 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
         const logs = logsOut.split('\n').filter(Boolean)
         const lines = stdout.split('\n').filter(Boolean)
         const containers = lines.map(line => {
-            const [cid, name, status, uptime] = line.split('|')
-            return { id: cid, name, status, uptime }
+            const [cid, name, status, uptime, project] = line.split('|')
+            return { id: cid, name, status, uptime, project: project || '' }
         })
 
         const container = containers.find(c => c.id.startsWith(safeId))
@@ -48,9 +49,11 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
         const relatedContainers = containers
             .filter(c => c.name.startsWith(service))
             .sort((a, b) => a.name.localeCompare(b.name))
+        const deployment = container.project ? await getDeploymentStatus(container.project) : null
 
         return res.send({
             service,
+            deployment,
             container: { ...container, details, logs },
             related: relatedContainers
         })

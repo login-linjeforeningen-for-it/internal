@@ -1,0 +1,12 @@
+[Unit]
+Description=Deploy %i with git pull and docker compose
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/%i
+ExecStart=/bin/zsh -lc 'git pull --ff-only origin main && docker compose up -d --build'
+
+[Install]
+WantedBy=multi-user.target

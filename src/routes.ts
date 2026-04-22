@@ -7,6 +7,10 @@ import restartServiceHandler from './handlers/docker/restartService.ts'
 import getIngress from './handlers/nginx/getIngress.ts'
 import getDockerContainer from './handlers/docker/getContainer.ts'
 import getDockerLogs from './handlers/docker/getLogs.ts'
+import getDeployments from './handlers/deploy/getDeployments.ts'
+import getDeployment from './handlers/deploy/getDeployment.ts'
+import postDeploy from './handlers/deploy/postDeploy.ts'
+import putAutoDeploy from './handlers/deploy/putAutoDeploy.ts'
 import getBackupStats from './handlers/backup/get.ts'
 import getBackupFiles from './handlers/backup/getFiles.ts'
 import restoreBackup from './handlers/backup/post.ts'
@@ -28,6 +32,10 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/docker/logs', { preHandler }, getDockerLogs)
     fastify.get('/docker/restart/:id', { preHandler }, restartHandler)
     fastify.get('/docker/restart/service/:id', { preHandler }, restartServiceHandler)
+    fastify.get('/deployments', { preHandler }, getDeployments)
+    fastify.get('/deployments/:id', { preHandler }, getDeployment)
+    fastify.post('/deployments/:id/run', { preHandler }, postDeploy)
+    fastify.put('/deployments/:id/auto', { preHandler }, putAutoDeploy)
 
     // backup
     fastify.get('/backup', { preHandler }, getBackupStats)
