@@ -261,7 +261,7 @@ async function getClusterActivity(container: QueryableContainer, credentials: Cr
                 NULLIF(application_name, ''),
                 EXTRACT(EPOCH FROM NOW() - query_start),
                 NULLIF(wait_event_type, ''),
-                LEFT(REGEXP_REPLACE(query, E'\\s+', ' ', 'g'), 400)
+                COALESCE(REGEXP_REPLACE(query, E'\\r', '', 'g'), '')
             FROM pg_stat_activity
             WHERE pid <> pg_backend_pid()
               AND state = 'active'
