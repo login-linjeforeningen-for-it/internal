@@ -10,13 +10,12 @@ export default async function getDockerContainers(_: FastifyRequest, res: Fastif
         const { stdout } = await execAsync(`docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.Label \"com.docker.compose.project\"}}"`)
         const lines = stdout.split('\n').filter(Boolean)
         const projects = [...new Set(lines.map(line => line.split('|')[3]).filter(Boolean))]
-        const deploymentStatuses = new Map<string, NonNullable<Awaited<ReturnType<typeof getDeploymentStatus>>>>()
-        for (const project of projects) {
-            const status = await getDeploymentStatus(project)
-            if (status) {
-                deploymentStatuses.set(project, status)
-            }
-        }
+        const deploymentStatuses = new Map<string, NonNullable<Awaited<ReturnType<typeof getDeploymentStatus>>>>(
+            (await Promise.all(projects.map(async (project) => {
+                const status = await getDeploymentStatus(project)
+                return status ? [project, status] as const : null
+            }))).filter((entry): entry is readonly [string, NonNullable<Awaited<ReturnType<typeof getDeploymentStatus>>>] => Boolean(entry))
+        )
 
         const containers = lines.map(line => {
             const [id, name, status, project] = line.split('|')

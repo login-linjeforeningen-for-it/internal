@@ -21,7 +21,7 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
 
     try {
         const { stdout } = await execAsync(
-            `docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}|{{.Label "com.docker.compose.project"}}"`,
+            `docker ps -a --format '{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}|{{.Label "com.docker.compose.project"}}'`,
             DOCKER_EXEC_OPTIONS
         )
 

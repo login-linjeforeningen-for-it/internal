@@ -4,6 +4,8 @@ import { type DeployTarget, getDeployServiceName, getDeployTimerName, getDeployT
 
 const execAsync = promisify(exec)
 const STATUS_CACHE_TTL_MS = 60 * 1000
+const DEFAULT_COMMAND_TIMEOUT_MS = 2500
+const GIT_FETCH_TIMEOUT_MS = 4000
 
 export type DeployStatus = {
     id: string
@@ -26,10 +28,10 @@ export type DeployStatus = {
 
 const statusCache = new Map<string, { expiresAt: number, value: DeployStatus }>()
 
-async function runCommand(command: string, cwd?: string) {
+async function runCommand(command: string, cwd?: string, timeout = DEFAULT_COMMAND_TIMEOUT_MS) {
     return await execAsync(command, {
         cwd,
-        shell: '/bin/zsh',
+        timeout,
         maxBuffer: 1024 * 1024,
     })
 }
@@ -54,7 +56,7 @@ async function getSystemctlState(name: string, mode: 'is-enabled' | 'is-active')
 
 async function getGitState(target: DeployTarget) {
     try {
-        await runCommand(`git fetch origin ${target.branch}`, target.repoPath)
+        await runCommand(`git fetch origin ${target.branch}`, target.repoPath, GIT_FETCH_TIMEOUT_MS)
         const [{ stdout: currentCommit }, { stdout: upstreamCommit }, { stdout: behindCount }, { stdout: dirtyOut }] = await Promise.all([
             runCommand('git rev-parse HEAD', target.repoPath),
             runCommand(`git rev-parse origin/${target.branch}`, target.repoPath),
@@ -95,8 +97,10 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
 
     const serviceUnit = getDeployServiceName(id)
     const timerUnit = getDeployTimerName(id)
-    const systemctlAvailable = await hasSystemctl()
-    const gitState = await getGitState(target)
+    const [systemctlAvailable, gitState] = await Promise.all([
+        hasSystemctl(),
+        getGitState(target),
+    ])
 
     const autoDeployEnabled = systemctlAvailable
         ? (await getSystemctlState(timerUnit, 'is-enabled')) === 'enabled'
@@ -146,13 +150,13 @@ export async function runDeployment(id: string) {
     }
 
     if (await hasSystemctl()) {
-        await runCommand(`systemctl start ${getDeployServiceName(id)}`)
+        await runCommand(`systemctl start ${getDeployServiceName(id)}`, undefined, 5000)
         statusCache.delete(id)
         return { ok: true, mode: 'systemctl', service: getDeployServiceName(id) }
     }
 
-    await runCommand(`git pull --ff-only origin ${target.branch}`, target.repoPath)
-    await runCommand(target.composeCommand, target.repoPath)
+    await runCommand(`git pull --ff-only origin ${target.branch}`, target.repoPath, 10000)
+    await runCommand(target.composeCommand, target.repoPath, 30000)
     statusCache.delete(id)
     return { ok: true, mode: 'direct', service: target.id }
 }
@@ -168,7 +172,7 @@ export async function setAutoDeploy(id: string, enabled: boolean) {
     }
 
     const timerUnit = getDeployTimerName(id)
-    await runCommand(`systemctl ${enabled ? 'enable --now' : 'disable --now'} ${timerUnit}`)
+    await runCommand(`systemctl ${enabled ? 'enable --now' : 'disable --now'} ${timerUnit}`, undefined, 5000)
     statusCache.delete(id)
     return {
         ok: true,

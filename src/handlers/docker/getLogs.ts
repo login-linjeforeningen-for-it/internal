@@ -11,7 +11,7 @@ import { join } from 'path'
 import { promisify } from 'util'
 
 const execAsync = promisify(exec)
-const DOCKER_EXEC_OPTIONS = { maxBuffer: 12 * 1024 * 1024 }
+const DOCKER_EXEC_OPTIONS = { maxBuffer: 12 * 1024 * 1024, timeout: 5000 }
 const DEFAULT_TAIL = 200
 const MAX_TAIL = 500
 
@@ -192,11 +192,13 @@ async function getHostLogSources({
         .filter(Boolean)
         .join('\n')
 
-    const journal = await safeExec(`journalctl -p err --since "24 hours ago" --no-pager -n ${tail} -o short-iso`)
-    const sshJournal = await safeExec(`journalctl --since "7 days ago" --no-pager -n ${tail} -u ssh -u sshd -o short-iso`)
-    const dockerJournal = await safeExec(`journalctl --since "24 hours ago" --no-pager -n ${tail} -u docker -o short-iso`)
-    const kernelJournal = await safeExec(`journalctl -k --since "24 hours ago" --no-pager -n ${tail} -o short-iso`)
-    const fail2banJournal = await safeExec(`journalctl --since "7 days ago" --no-pager -n ${tail} -u fail2ban -o short-iso`)
+    const [journal, sshJournal, dockerJournal, kernelJournal, fail2banJournal] = await Promise.all([
+        safeExec(`journalctl -p err --since "24 hours ago" --no-pager -n ${tail} -o short-iso`),
+        safeExec(`journalctl --since "7 days ago" --no-pager -n ${tail} -u ssh -u sshd -o short-iso`),
+        safeExec(`journalctl --since "24 hours ago" --no-pager -n ${tail} -u docker -o short-iso`),
+        safeExec(`journalctl -k --since "24 hours ago" --no-pager -n ${tail} -o short-iso`),
+        safeExec(`journalctl --since "7 days ago" --no-pager -n ${tail} -u fail2ban -o short-iso`),
+    ])
     const deploySources = await Promise.all(getDeployTargets().map(async (target) => ({
         id: `deploy-${target.id}`,
         name: `${target.name} deploy`,
