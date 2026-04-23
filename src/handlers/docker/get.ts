@@ -7,7 +7,7 @@ const execAsync = promisify(exec)
 
 export default async function getDockerContainers(_: FastifyRequest, res: FastifyReply) {
     try {
-        const { stdout } = await execAsync(`docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.Label \"com.docker.compose.project\"}}"`)
+        const { stdout } = await execAsync(`docker ps -a --format '{{.ID}}|{{.Names}}|{{.Status}}|{{.Label "com.docker.compose.project"}}'`)
         const lines = stdout.split('\n').filter(Boolean)
         const projects = [...new Set(lines.map(line => line.split('|')[3]).filter(Boolean))]
         const deploymentStatuses = new Map<string, NonNullable<Awaited<ReturnType<typeof getDeploymentStatus>>>>(

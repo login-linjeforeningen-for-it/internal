@@ -13,7 +13,7 @@ type ContainerInfo = {
 
 export default async function getContainers(): Promise<ContainerInfo[]> {
     const { stdout } = await execAsync(
-        'docker ps -a --format "{{.ID}}|{{.Names}}|{{.Status}}|{{.Label \\"com.docker.compose.project\\"}}"',
+        `docker ps -a --format '{{.ID}}|{{.Names}}|{{.Status}}|{{.Label "com.docker.compose.project"}}'`,
         DOCKER_EXEC_OPTIONS
     )
 
