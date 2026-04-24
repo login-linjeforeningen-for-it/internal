@@ -2,14 +2,10 @@ import { exec } from 'child_process'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { promisify } from 'util'
 import { getDeploymentStatus } from '#utils/deploy/status.ts'
+import sanitizeDockerId from '#utils/containers/sanitizeDockerId.ts'
+import config from '#config'
 
 const execAsync = promisify(exec)
-const DOCKER_EXEC_OPTIONS = { maxBuffer: 8 * 1024 * 1024 }
-const DOCKER_LOG_TAIL = 500
-
-function sanitizeDockerId(id: string) {
-    return id.replace(/[^a-zA-Z0-9_.-]/g, '')
-}
 
 export default async function getDockerContainer(req: FastifyRequest, res: FastifyReply) {
     const { id } = req.params as { id: string }
@@ -22,15 +18,15 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
     try {
         const { stdout } = await execAsync(
             `docker ps -a --format '{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}|{{.Label "com.docker.compose.project"}}'`,
-            DOCKER_EXEC_OPTIONS
+            config.docker.options
         )
 
-        const { stdout: inspectOut } = await execAsync(`docker inspect ${safeId}`, DOCKER_EXEC_OPTIONS)
+        const { stdout: inspectOut } = await execAsync(`docker inspect ${safeId}`, config.docker.options)
         const details = JSON.parse(inspectOut)[0]
 
         const { stdout: logsOut } = await execAsync(
-            `docker logs --tail ${DOCKER_LOG_TAIL} ${safeId}`,
-            DOCKER_EXEC_OPTIONS
+            `docker logs --tail ${config.docker.tail} ${safeId}`,
+            config.docker.options
         )
         const logs = logsOut.split('\n').filter(Boolean)
         const lines = stdout.split('\n').filter(Boolean)

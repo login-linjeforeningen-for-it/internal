@@ -29,7 +29,10 @@ const config = {
         || (env.AUTHENTIK_URL
             ? `${env.AUTHENTIK_URL}/application/o/userinfo/`
             : 'https://authentik.login.no/application/o/userinfo/'),
-    tekkom: 'TekKom',
+    login: {
+        tekkom: 'TekKom',
+        color: 0xfd8738
+    },
     backup: {
         path: '/home/dev/backups',
         schedule: '0 22 * * *',
@@ -45,6 +48,24 @@ const config = {
     vulnerability: {
         path: path.join(process.cwd(), 'data', 'vulnerabilities.json'),
         schedule: '0 2 * * *'
+    },
+    queenbee: {
+        url: env.QUEENBEE_URL || 'https://queenbee.login.no',
+    },
+    logs: {
+        fingerprint: {
+            ms: 24 * 60 * 60 * 1000
+        },
+        alerts: {
+            enabled: (env.LOG_ALERTS_ENABLED || 'true') !== 'false',
+            webhook: env.LOG_ALERTS_WEBHOOK_URL || 'https://discord.com/api/webhooks/1412821204498386984/zwAZbaIo7talBNTXwZWEnvY0jIzRO0Kr97efOORTzDNF_ksZBetA5jJmT_Je6tkJhnyq',
+            threadId: env.LOG_ALERTS_THREAD_ID || '1484122179665788990',
+            schedule: env.LOG_ALERTS_SCHEDULE || '*/1 * * * *',
+        },
+    },
+    docker: {
+        options: { maxBuffer: 12 * 1024 * 1024, timeout: 5000 },
+        tail: 500
     }
 }
 
