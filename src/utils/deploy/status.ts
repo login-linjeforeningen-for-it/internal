@@ -6,6 +6,7 @@ const execAsync = promisify(exec)
 const STATUS_CACHE_TTL_MS = 60 * 1000
 const DEFAULT_COMMAND_TIMEOUT_MS = 2500
 const GIT_FETCH_TIMEOUT_MS = 4000
+const systemctlScopeCache = new Map<string, 'user' | 'system' | 'none'>()
 
 export type DeployStatus = {
     id: string
@@ -14,6 +15,7 @@ export type DeployStatus = {
     branch: string
     serviceUnit: string
     timerUnit: string
+    unitScope: 'user' | 'system' | 'none'
     autoDeployEnabled: boolean
     autoDeployActive: boolean
     serviceActive: boolean
@@ -50,9 +52,43 @@ async function hasSystemctl() {
     }
 }
 
-async function getSystemctlState(name: string, mode: 'is-enabled' | 'is-active') {
+function getSystemctlCommand(scope: 'user' | 'system') {
+    return scope === 'user' ? 'systemctl --user' : 'systemctl'
+}
+
+async function getSystemctlScope(name: string) {
+    const cached = systemctlScopeCache.get(name)
+    if (cached) {
+        return cached
+    }
+
     try {
-        const { stdout } = await runCommand(`systemctl ${mode} ${name}`)
+        const { stdout } = await runCommand(`systemctl --user show ${name} --property=Id --value`, undefined, 1500)
+        if (stdout.trim() === name) {
+            systemctlScopeCache.set(name, 'user')
+            return 'user' as const
+        }
+    } catch {
+        // Fall through to system scope detection below.
+    }
+
+    try {
+        const { stdout } = await runCommand(`systemctl show ${name} --property=Id --value`, undefined, 1500)
+        if (stdout.trim() === name) {
+            systemctlScopeCache.set(name, 'system')
+            return 'system' as const
+        }
+    } catch {
+        // No installed unit in this scope.
+    }
+
+    systemctlScopeCache.set(name, 'none')
+    return 'none' as const
+}
+
+async function getSystemctlState(scope: 'user' | 'system', name: string, mode: 'is-enabled' | 'is-active') {
+    try {
+        const { stdout } = await runCommand(`${getSystemctlCommand(scope)} ${mode} ${name}`)
         return stdout.trim()
     } catch {
         return 'unknown'
@@ -73,9 +109,9 @@ function parseSystemctlTimestampUs(raw: string | undefined) {
     return new Date(micros / 1000).toISOString()
 }
 
-async function getSystemctlProperties(name: string, properties: string[]) {
+async function getSystemctlProperties(scope: 'user' | 'system', name: string, properties: string[]) {
     try {
-        const { stdout } = await runCommand(`systemctl show ${name} --property=${properties.join(',')} --value=false`)
+        const { stdout } = await runCommand(`${getSystemctlCommand(scope)} show ${name} --property=${properties.join(',')} --value=false`)
         const values = stdout.split('\n')
 
         return Object.fromEntries(properties.map((property, index) => [property, values[index]?.trim() ?? '']))
@@ -131,6 +167,9 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         hasSystemctl(),
         getGitState(target),
     ])
+    const unitScope = systemctlAvailable
+        ? await getSystemctlScope(serviceUnit)
+        : 'none'
 
     const [
         autoDeployEnabled,
@@ -138,13 +177,13 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         serviceActive,
         timerProperties,
         serviceProperties,
-    ] = systemctlAvailable
+    ] = systemctlAvailable && unitScope !== 'none'
         ? await Promise.all([
-            getSystemctlState(timerUnit, 'is-enabled').then(state => state === 'enabled'),
-            getSystemctlState(timerUnit, 'is-active').then(state => state === 'active'),
-            getSystemctlState(serviceUnit, 'is-active').then(state => state === 'active'),
-            getSystemctlProperties(timerUnit, ['LastTriggerUSec']),
-            getSystemctlProperties(serviceUnit, ['ActiveState', 'SubState', 'Result', 'ExecMainStartTimestampUSec']),
+            getSystemctlState(unitScope, timerUnit, 'is-enabled').then(state => state === 'enabled'),
+            getSystemctlState(unitScope, timerUnit, 'is-active').then(state => state === 'active'),
+            getSystemctlState(unitScope, serviceUnit, 'is-active').then(state => state === 'active'),
+            getSystemctlProperties(unitScope, timerUnit, ['LastTriggerUSec']),
+            getSystemctlProperties(unitScope, serviceUnit, ['ActiveState', 'SubState', 'Result', 'ExecMainStartTimestampUSec']),
         ])
         : [
             false,
@@ -161,6 +200,7 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         branch: target.branch,
         serviceUnit,
         timerUnit,
+        unitScope,
         autoDeployEnabled,
         autoDeployActive,
         serviceActive,
@@ -201,9 +241,12 @@ export async function runDeployment(id: string) {
     }
 
     if (await hasSystemctl()) {
-        await runCommand(`systemctl start ${getDeployServiceName(id)}`, undefined, 5000)
-        statusCache.delete(id)
-        return { ok: true, mode: 'systemctl', service: getDeployServiceName(id) }
+        const scope = await getSystemctlScope(getDeployServiceName(id))
+        if (scope !== 'none') {
+            await runCommand(`${getSystemctlCommand(scope)} start ${getDeployServiceName(id)}`, undefined, 5000)
+            statusCache.delete(id)
+            return { ok: true, mode: scope === 'user' ? 'systemctl-user' : 'systemctl', service: getDeployServiceName(id) }
+        }
     }
 
     await runCommand(`git pull --ff-only origin ${target.branch}`, target.repoPath, 10000)
@@ -223,7 +266,12 @@ export async function setAutoDeploy(id: string, enabled: boolean) {
     }
 
     const timerUnit = getDeployTimerName(id)
-    await runCommand(`systemctl ${enabled ? 'enable --now' : 'disable --now'} ${timerUnit}`, undefined, 5000)
+    const scope = await getSystemctlScope(getDeployServiceName(id))
+    if (scope === 'none') {
+        throw new Error('No deploy unit is installed for this target')
+    }
+
+    await runCommand(`${getSystemctlCommand(scope)} ${enabled ? 'enable --now' : 'disable --now'} ${timerUnit}`, undefined, 5000)
     statusCache.delete(id)
     return {
         ok: true,

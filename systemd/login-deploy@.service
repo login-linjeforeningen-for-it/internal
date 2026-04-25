@@ -5,9 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-EnvironmentFile=-/etc/login-deploy/%i.env
+EnvironmentFile=-%h/.config/login-deploy/%i.env
 TimeoutStartSec=900
-ExecStart=/bin/bash -lc 'test -n "$REPO_PATH" && test -d "$REPO_PATH" && runuser -u "${DEPLOY_USER:-ubuntu}" -- /bin/bash -lc "cd \"$REPO_PATH\" && git pull --ff-only origin ${DEPLOY_BRANCH:-main} && ${DEPLOY_COMPOSE_COMMAND:-docker compose up -d --build}"'
+ExecStart=/bin/bash -lc 'test -n "$REPO_PATH" && test -d "$REPO_PATH" && cd "$REPO_PATH" && git pull --ff-only origin ${DEPLOY_BRANCH:-main} && ${DEPLOY_COMPOSE_COMMAND:-docker compose up -d --build}'
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

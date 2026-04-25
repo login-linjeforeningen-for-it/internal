@@ -8,12 +8,13 @@ import getDeployTargets from '../src/utils/deploy/getDeployTargets.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const systemdSourceDir = path.join(repoRoot, 'systemd')
-const systemdTargetDir = '/etc/systemd/system'
-const envTargetDir = '/etc/login-deploy'
-const deployUser = process.env.DEPLOY_USER || process.env.SUDO_USER || process.env.USER || 'ubuntu'
+const homeDir = process.env.HOME || path.dirname(repoRoot)
+const systemdTargetDir = path.join(homeDir, '.config/systemd/user')
+const envTargetDir = path.join(homeDir, '.config/login-deploy')
 const enableTimers = process.argv.includes('--enable')
 
 async function copySystemdTemplate(filename: string) {
+    await fs.mkdir(systemdTargetDir, { recursive: true })
     await fs.copyFile(
         path.join(systemdSourceDir, filename),
         path.join(systemdTargetDir, filename)
@@ -25,7 +26,6 @@ async function writeEnvironmentFiles() {
 
     for (const target of getDeployTargets()) {
         const envFile = [
-            `DEPLOY_USER=${deployUser}`,
             `REPO_PATH=${target.repoPath}`,
             `DEPLOY_BRANCH=${target.branch}`,
             `DEPLOY_COMPOSE_COMMAND='${target.composeCommand.replace(/'/g, `'\"'\"'`)}'`,
@@ -37,19 +37,15 @@ async function writeEnvironmentFiles() {
 }
 
 async function main() {
-    if (typeof process.getuid === 'function' && process.getuid() !== 0) {
-        throw new Error('Run this script as root, for example with: sudo bun scripts/installDeployUnits.ts')
-    }
-
     await copySystemdTemplate('login-deploy@.service')
     await copySystemdTemplate('login-deploy@.timer')
     await writeEnvironmentFiles()
 
-    execFileSync('systemctl', ['daemon-reload'], { stdio: 'inherit' })
+    execFileSync('systemctl', ['--user', 'daemon-reload'], { stdio: 'inherit' })
 
     if (enableTimers) {
         for (const target of getDeployTargets()) {
-            execFileSync('systemctl', ['enable', '--now', `login-deploy@${target.id}.timer`], { stdio: 'inherit' })
+            execFileSync('systemctl', ['--user', 'enable', '--now', `login-deploy@${target.id}.timer`], { stdio: 'inherit' })
         }
     }
 
