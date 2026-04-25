@@ -7,6 +7,11 @@ import parseCurrentYearTimestamp from './parseCurrentYearTimestamp'
 import parsePostgresTimestamp from './parsePostgresTimestamp'
 import parseSlashTimestamp from './parseSlashTimestamp'
 
+function isBenignOperationalNoise(message: string, raw: string) {
+    return /Failed to find Server Action "[a-f0-9]+"/i.test(message)
+        || /Failed to find Server Action "[a-f0-9]+"/i.test(raw)
+}
+
 export default function parseLogLine(line: string) {
     const trimmed = line.trim()
     if (!trimmed) {
@@ -18,12 +23,13 @@ export default function parseLogLine(line: string) {
         const level = normalizeLevel(parsed.level ?? parsed.severity)
         const message = normalizeText(parsed.msg ?? parsed.message ?? parsed.error ?? trimmed)
         const timestamp = normalizeText(parsed.time ?? parsed.timestamp)
-        const isError = level === 'error' || inferIsError(message, trimmed)
+        const benign = isBenignOperationalNoise(message, trimmed)
+        const isError = !benign && (level === 'error' || inferIsError(message, trimmed))
 
         return {
             raw: trimmed,
             message,
-            level: level || (isError ? 'error' : 'info'),
+            level: benign ? 'info' : level || (isError ? 'error' : 'info'),
             timestamp: timestamp ? normalizeTimestamp(timestamp) || timestamp : null,
             isError,
             structured: true
@@ -33,12 +39,13 @@ export default function parseLogLine(line: string) {
         if (nginxMatch) {
             const [, rawTimestamp, rawLevel, message] = nginxMatch
             const level = inferLevel(message, rawLevel)
-            const isError = level === 'error' || inferIsError(message, trimmed)
+            const benign = isBenignOperationalNoise(message, trimmed)
+            const isError = !benign && (level === 'error' || inferIsError(message, trimmed))
 
             return {
                 raw: trimmed,
                 message,
-                level: level || (isError ? 'error' : 'info'),
+                level: benign ? 'info' : level || (isError ? 'error' : 'info'),
                 timestamp: parseSlashTimestamp(rawTimestamp),
                 isError,
                 structured: false
@@ -49,12 +56,13 @@ export default function parseLogLine(line: string) {
         if (journalMatch) {
             const [, rawTimestamp, source, message] = journalMatch
             const level = inferLevel(message, source)
-            const isError = level === 'error' || inferIsError(message, trimmed)
+            const benign = isBenignOperationalNoise(message, trimmed)
+            const isError = !benign && (level === 'error' || inferIsError(message, trimmed))
 
             return {
                 raw: trimmed,
                 message,
-                level: level || (isError ? 'error' : 'info'),
+                level: benign ? 'info' : level || (isError ? 'error' : 'info'),
                 timestamp: normalizeTimestamp(rawTimestamp),
                 isError,
                 structured: false
@@ -65,12 +73,13 @@ export default function parseLogLine(line: string) {
         if (postgresMatch) {
             const [, rawTimestamp, timezone, rawLevel, message] = postgresMatch
             const level = inferLevel(message, rawLevel)
-            const isError = level === 'error' || inferIsError(message, trimmed)
+            const benign = isBenignOperationalNoise(message, trimmed)
+            const isError = !benign && (level === 'error' || inferIsError(message, trimmed))
 
             return {
                 raw: trimmed,
                 message,
-                level: level || (isError ? 'error' : 'info'),
+                level: benign ? 'info' : level || (isError ? 'error' : 'info'),
                 timestamp: parsePostgresTimestamp(rawTimestamp, timezone),
                 isError,
                 structured: false
@@ -81,12 +90,13 @@ export default function parseLogLine(line: string) {
         if (syslogMatch) {
             const [, rawTimestamp, source, message] = syslogMatch
             const level = inferLevel(message, source)
-            const isError = level === 'error' || inferIsError(message, trimmed)
+            const benign = isBenignOperationalNoise(message, trimmed)
+            const isError = !benign && (level === 'error' || inferIsError(message, trimmed))
 
             return {
                 raw: trimmed,
                 message,
-                level: level || (isError ? 'error' : 'info'),
+                level: benign ? 'info' : level || (isError ? 'error' : 'info'),
                 timestamp: parseCurrentYearTimestamp(rawTimestamp),
                 isError,
                 structured: false
@@ -98,23 +108,25 @@ export default function parseLogLine(line: string) {
             const [, rawTimestamp, message] = historyMatch
             const timestamp = Number(rawTimestamp)
             const parsedTimestamp = Number.isFinite(timestamp) ? new Date(timestamp * 1000).toISOString() : null
-            const isError = inferIsError(message, trimmed)
+            const benign = isBenignOperationalNoise(message, trimmed)
+            const isError = !benign && inferIsError(message, trimmed)
 
             return {
                 raw: trimmed,
                 message,
-                level: isError ? 'error' : 'info',
+                level: benign ? 'info' : isError ? 'error' : 'info',
                 timestamp: parsedTimestamp,
                 isError,
                 structured: false
             }
         }
 
-        const isError = inferIsError(trimmed, trimmed)
+        const benign = isBenignOperationalNoise(trimmed, trimmed)
+        const isError = !benign && inferIsError(trimmed, trimmed)
         return {
             raw: trimmed,
             message: trimmed,
-            level: isError ? 'error' : 'info',
+            level: benign ? 'info' : isError ? 'error' : 'info',
             timestamp: null,
             isError,
             structured: false
