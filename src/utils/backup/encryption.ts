@@ -11,22 +11,32 @@ const IV_LENGTH = 12
 const AUTH_TAG_LENGTH = 16
 const KEY_LENGTH = 32
 const HEADER_LENGTH = MAGIC.length + SALT_LENGTH + IV_LENGTH
+const MIN_PASSPHRASE_LENGTH = 16
+const SCRYPT_OPTIONS = {
+    N: 2 ** 15,
+    r: 8,
+    p: 1,
+    maxmem: 64 * 1024 * 1024
+} as const
 
 function getEncryptionKey() {
     return config.backup.encryption.key || ''
 }
 
 function ensureEncryptionKey() {
-    const key = getEncryptionKey()
+    const key = getEncryptionKey().trim()
     if (!key) {
         throw new Error('Backup encryption key is not configured')
+    }
+    if (key.length < MIN_PASSPHRASE_LENGTH) {
+        throw new Error(`Backup encryption key must be at least ${MIN_PASSPHRASE_LENGTH} characters`)
     }
     return key
 }
 
 async function deriveKey(passphrase: string, salt: Buffer) {
     return await new Promise<Buffer>((resolve, reject) => {
-        scrypt(passphrase, salt, KEY_LENGTH, (error, key) => {
+        scrypt(passphrase, salt, KEY_LENGTH, SCRYPT_OPTIONS, (error, key) => {
             if (error) {
                 reject(error)
                 return
@@ -82,8 +92,11 @@ export async function isEncryptedBackupFile(filePath: string) {
         const magic = Buffer.alloc(MAGIC.length)
         const read = await handle.read(magic, 0, MAGIC.length, 0)
         return read.bytesRead === MAGIC.length && magic.equals(MAGIC)
-    } catch {
-        return false
+    } catch (error: any) {
+        if (error?.code === 'ENOENT') {
+            return false
+        }
+        throw new Error(`Failed to inspect backup file encryption: ${error?.message || 'unknown error'}`)
     } finally {
         await handle?.close().catch(() => {})
     }
@@ -130,9 +143,16 @@ export async function encryptBackupFile(filePath: string) {
     }
 }
 
-export async function decryptBackupFile(filePath: string, outputPath: string) {
+export async function decryptBackupFile(
+    filePath: string,
+    outputPath: string,
+    options?: { allowUnencryptedInput?: boolean }
+) {
     if (!(await isEncryptedBackupFile(filePath))) {
-        return filePath
+        if (options?.allowUnencryptedInput) {
+            return filePath
+        }
+        throw new Error('Backup file is not encrypted')
     }
 
     const passphrase = ensureEncryptionKey()
