@@ -1,3 +1,5 @@
+import getServiceName from './runtime/getServiceName.ts'
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 type JsonLogEntry = {
@@ -147,7 +149,7 @@ export function log(level: LogLevel, msg: string, context?: Record<string, unkno
     write({
         time: new Date().toISOString(),
         level,
-        service: 'internal_api',
+        service: getServiceName(),
         runtime: 'api',
         environment: process.env.NODE_ENV ?? 'development',
         pid: process.pid,
@@ -178,7 +180,7 @@ export function installJsonConsoleLogger() {
             write({
                 time: new Date().toISOString(),
                 level,
-                service: 'internal_api',
+                service: getServiceName(),
                 runtime: 'api',
                 environment: process.env.NODE_ENV ?? 'development',
                 pid: process.pid,

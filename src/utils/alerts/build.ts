@@ -1,5 +1,4 @@
 import config from '#config'
-import { LogEntry } from '#handlers/docker/getLogs.ts'
 import { buildLogsDeepLink } from '#utils/containers/logs/buildLogsDeepLink.ts'
 import escapeCodeBlock from '#utils/containers/logs/escapeCodeBlock.ts'
 import truncate from '#utils/containers/logs/truncate.ts'

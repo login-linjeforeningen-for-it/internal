@@ -11,6 +11,7 @@ import vulnerabilityScheduler from './plugins/vulnerabilityScheduler.ts'
 import fs from 'fs'
 import path from 'path'
 import { installJsonConsoleLogger, log } from './utils/jsonLogger.ts'
+import getServiceName from './utils/runtime/getServiceName.ts'
 
 process.env.TZ = 'Europe/Oslo'
 installJsonConsoleLogger()
@@ -19,7 +20,7 @@ const fastify = Fastify({
     logger: {
         level: process.env.LOG_LEVEL ?? 'info',
         base: {
-            service: 'internal_api',
+            service: getServiceName(),
             runtime: 'api',
             environment: process.env.NODE_ENV ?? 'development',
         },

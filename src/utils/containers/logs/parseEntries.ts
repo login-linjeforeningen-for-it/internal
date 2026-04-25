@@ -1,4 +1,3 @@
-import { ParsedLogEntry } from '#handlers/docker/getLogs.ts'
 import parseLogLine from './parseLogLine'
 
 export default function parseEntries(raw: string) {

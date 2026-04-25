@@ -1,19 +1,8 @@
-import { exec } from 'child_process'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { promisify } from 'util'
-import parseLogLine from '#utils/containers/logs/parseLogLine.ts'
 import normalizeText from '#utils/normalize.ts'
 import sanitize from '#utils/sanitize.ts'
 import config from '#config'
 import { collectDockerLogsOverview } from '#utils/containers/logs/collectDockerLogsOverview.ts'
-
-const execAsync = promisify(exec)
-
-export type ParsedLogEntry = NonNullable<ReturnType<typeof parseLogLine>>
-
-export type LogEntry = ParsedLogEntry & {
-    fingerprint: string
-}
 
 type LogQuery = {
     service?: string

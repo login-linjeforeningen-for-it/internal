@@ -1,5 +1,3 @@
-import { ParsedLogEntry } from '#handlers/docker/getLogs.ts'
-
 export default function filterEntries(entries: ParsedLogEntry[], {
     level,
     search,

@@ -1,5 +1,4 @@
 import config from '#config'
-import type { LogEntry } from '../../handlers/docker/getLogs.ts'
 import buildDiscordLogAlertPayload from './build.ts'
 
 export default async function sendDiscordLogAlert(args: {
