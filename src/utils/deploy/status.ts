@@ -111,10 +111,20 @@ function parseSystemctlTimestampUs(raw: string | undefined) {
 
 async function getSystemctlProperties(scope: 'user' | 'system', name: string, properties: string[]) {
     try {
-        const { stdout } = await runCommand(`${getSystemctlCommand(scope)} show ${name} --property=${properties.join(',')} --value=false`)
-        const values = stdout.split('\n')
+        const { stdout } = await runCommand(`${getSystemctlCommand(scope)} show ${name} --property=${properties.join(',')}`)
+        const values = Object.fromEntries(
+            stdout
+                .split('\n')
+                .filter(Boolean)
+                .map(line => {
+                    const separator = line.indexOf('=')
+                    const key = separator >= 0 ? line.slice(0, separator) : line
+                    const value = separator >= 0 ? line.slice(separator + 1) : ''
+                    return [key.trim(), value.trim()]
+                })
+        )
 
-        return Object.fromEntries(properties.map((property, index) => [property, values[index]?.trim() ?? '']))
+        return Object.fromEntries(properties.map(property => [property, values[property] ?? '']))
     } catch {
         return Object.fromEntries(properties.map(property => [property, '']))
     }
