@@ -12,6 +12,36 @@ function isBenignOperationalNoise(message: string, raw: string) {
         || /Failed to find Server Action "[a-f0-9]+"/i.test(raw)
 }
 
+function parseHttpAccessStatus(raw: string) {
+    const match = raw.match(/^\S+ \S+ \S+ \[([^\]]+)\] "(?:[^"\\]|\\.)*" (\d{3})\b/)
+    if (!match) {
+        return null
+    }
+
+    return {
+        rawTimestamp: match[1],
+        status: Number(match[2])
+    }
+}
+
+function parseHttpAccessTimestamp(rawTimestamp: string) {
+    const match = rawTimestamp.match(/^(\d{2})\/([A-Za-z]{3})\/(\d{4}):(\d{2}):(\d{2}):(\d{2}) ([+-]\d{4})$/)
+    if (!match) {
+        return null
+    }
+
+    const [, day, month, year, hour, minute, second, offset] = match
+    const monthIndex = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        .findIndex(value => value.toLowerCase() === month.toLowerCase())
+
+    if (monthIndex < 0) {
+        return null
+    }
+
+    const normalizedOffset = `${offset.slice(0, 3)}:${offset.slice(3)}`
+    return normalizeTimestamp(`${year}-${String(monthIndex + 1).padStart(2, '0')}-${day}T${hour}:${minute}:${second}${normalizedOffset}`)
+}
+
 export default function parseLogLine(line: string) {
     const trimmed = line.trim()
     if (!trimmed) {
@@ -35,6 +65,19 @@ export default function parseLogLine(line: string) {
             structured: true
         }
     } catch {
+        const accessMatch = parseHttpAccessStatus(trimmed)
+        if (accessMatch) {
+            const isError = accessMatch.status >= 500
+            return {
+                raw: trimmed,
+                message: trimmed,
+                level: isError ? 'error' : 'info',
+                timestamp: parseHttpAccessTimestamp(accessMatch.rawTimestamp),
+                isError,
+                structured: false
+            }
+        }
+
         const nginxMatch = trimmed.match(/^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}) \[([^\]]+)\] \d+#\d+: (.*)$/)
         if (nginxMatch) {
             const [, rawTimestamp, rawLevel, message] = nginxMatch
