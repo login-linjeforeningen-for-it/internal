@@ -23,6 +23,11 @@ export type DeployStatus = {
     upstreamCommit: string | null
     dirty: boolean
     reachable: boolean
+    activeState: string
+    subState: string
+    lastResult: string | null
+    lastDeploymentAt: string | null
+    lastAutoDeployAt: string | null
     error: string | null
 }
 
@@ -51,6 +56,31 @@ async function getSystemctlState(name: string, mode: 'is-enabled' | 'is-active')
         return stdout.trim()
     } catch {
         return 'unknown'
+    }
+}
+
+function parseSystemctlTimestampUs(raw: string | undefined) {
+    const trimmed = raw?.trim()
+    if (!trimmed || trimmed === '0') {
+        return null
+    }
+
+    const micros = Number(trimmed)
+    if (!Number.isFinite(micros) || micros <= 0) {
+        return null
+    }
+
+    return new Date(micros / 1000).toISOString()
+}
+
+async function getSystemctlProperties(name: string, properties: string[]) {
+    try {
+        const { stdout } = await runCommand(`systemctl show ${name} --property=${properties.join(',')} --value=false`)
+        const values = stdout.split('\n')
+
+        return Object.fromEntries(properties.map((property, index) => [property, values[index]?.trim() ?? '']))
+    } catch {
+        return Object.fromEntries(properties.map(property => [property, '']))
     }
 }
 
@@ -102,15 +132,27 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         getGitState(target),
     ])
 
-    const autoDeployEnabled = systemctlAvailable
-        ? (await getSystemctlState(timerUnit, 'is-enabled')) === 'enabled'
-        : false
-    const autoDeployActive = systemctlAvailable
-        ? (await getSystemctlState(timerUnit, 'is-active')) === 'active'
-        : false
-    const serviceActive = systemctlAvailable
-        ? (await getSystemctlState(serviceUnit, 'is-active')) === 'active'
-        : false
+    const [
+        autoDeployEnabled,
+        autoDeployActive,
+        serviceActive,
+        timerProperties,
+        serviceProperties,
+    ] = systemctlAvailable
+        ? await Promise.all([
+            getSystemctlState(timerUnit, 'is-enabled').then(state => state === 'enabled'),
+            getSystemctlState(timerUnit, 'is-active').then(state => state === 'active'),
+            getSystemctlState(serviceUnit, 'is-active').then(state => state === 'active'),
+            getSystemctlProperties(timerUnit, ['LastTriggerUSec']),
+            getSystemctlProperties(serviceUnit, ['ActiveState', 'SubState', 'Result', 'ExecMainStartTimestampUSec']),
+        ])
+        : [
+            false,
+            false,
+            false,
+            { LastTriggerUSec: '' },
+            { ActiveState: '', SubState: '', Result: '', ExecMainStartTimestampUSec: '' }
+        ]
 
     const result = {
         id: target.id,
@@ -128,12 +170,21 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         upstreamCommit: gitState.upstreamCommit,
         dirty: gitState.dirty,
         reachable: gitState.reachable,
+        activeState: serviceProperties.ActiveState || 'unknown',
+        subState: serviceProperties.SubState || 'unknown',
+        lastResult: serviceProperties.Result || null,
+        lastDeploymentAt: parseSystemctlTimestampUs(serviceProperties.ExecMainStartTimestampUSec),
+        lastAutoDeployAt: parseSystemctlTimestampUs(timerProperties.LastTriggerUSec),
         error: gitState.error,
     }
 
     statusCache.set(id, {
         value: result,
-        expiresAt: Date.now() + STATUS_CACHE_TTL_MS
+        expiresAt: Date.now() + (
+            result.activeState === 'activating'
+                ? 2000
+                : STATUS_CACHE_TTL_MS
+        )
     })
 
     return result
