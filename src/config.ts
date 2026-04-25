@@ -23,6 +23,7 @@ if (missingVariables.length > 0) {
 const env = Object.fromEntries(
     requiredEnvironmentVariables.map((key) => [key, process.env[key]])
 )
+const backupEncryptionKey = process.env.BACKUP_ENCRYPTION_KEY || ''
 
 const config = {
     userinfo: env.AUTHENTIK_USERINFO_URL
@@ -37,6 +38,10 @@ const config = {
         path: '/home/dev/backups',
         schedule: '0 22 * * *',
         retention: 7,
+        encryption: {
+            enabled: backupEncryptionKey.length > 0,
+            key: backupEncryptionKey
+        },
         s3: {
             endpoint: env.S3_ENDPOINT || '',
             accessKey: env.S3_ACCESS_KEY || '',

@@ -7,6 +7,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import config from '#config'
 import getPostgresContainers from '#utils/backup/containers.ts'
 import { getBackupDir, getContainerEnv } from '#utils/backup/utils.ts'
+import { encryptBackupFile } from '#utils/backup/encryption.ts'
 
 const execAsync = promisify(exec)
 
@@ -50,17 +51,18 @@ export async function runBackup() {
                     await fs.unlink(file).catch(() => { })
                     throw new Error('Empty backup')
                 }
-                console.log(`\tSaved: ${file}`)
+                const encryptedFile = await encryptBackupFile(file)
+                console.log(`\tSaved: ${encryptedFile}`)
 
                 if (s3 && config.backup.s3.bucket) {
                     try {
                         await s3.send(new PutObjectCommand({
                             Bucket: config.backup.s3.bucket,
-                            Key: `${project}/${path.basename(file)}`,
-                            Body: createReadStream(file),
+                            Key: `${project}/${path.basename(encryptedFile)}`,
+                            Body: createReadStream(encryptedFile),
                             StorageClass: 'STANDARD_IA'
                         }))
-                        console.log(`\tUploaded to S3: ${project}/${path.basename(file)}`)
+                        console.log(`\tUploaded to S3: ${project}/${path.basename(encryptedFile)}`)
                     } catch (e: any) {
                         console.error(`\tS3 Upload failed:`, e.message || e)
                     }

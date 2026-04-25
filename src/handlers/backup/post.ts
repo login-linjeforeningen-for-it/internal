@@ -8,6 +8,11 @@ import { getBackupDir, getContainerEnv } from '#utils/backup/utils.ts'
 import getPostgresContainers from '#utils/backup/containers.ts'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import config from '#config'
+import {
+    decryptBackupFile,
+    encryptBackupFile,
+    isEncryptedBackupFile
+} from '#utils/backup/encryption.ts'
 
 const execAsync = promisify(exec)
 
@@ -18,6 +23,10 @@ type RestoreBackupProps = {
 
 export default async function restoreBackup(req: FastifyRequest, res: FastifyReply) {
     const { service, file } = req.body as RestoreBackupProps
+    let backupFilePath = ''
+    let restoreFilePath = ''
+    let downloadedRemoteFile = false
+    let removeRestoreFile = false
 
     if (!service || !file) {
         return res.status(400).send({ error: 'Missing service or file' })
@@ -31,7 +40,7 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             return res.status(404).send({ error: 'Container not found' })
         }
 
-        const { id: containerId, name, status, project, workingDir } = container
+        const { id: containerId, status, project, workingDir } = container
 
         if (!project || !workingDir) {
             return res.status(400).send({ error: 'Container missing required labels' })
@@ -47,9 +56,11 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             return res.status(400).send({ error: 'Missing database credentials in .env' })
         }
 
-        const backupFilePath = path.join(getBackupDir(project), file)
-        
-        let isLocal = true
+        const backupDir = getBackupDir(project)
+        await fs.mkdir(backupDir, { recursive: true })
+        backupFilePath = path.join(backupDir, file)
+        restoreFilePath = backupFilePath
+
         try {
             await fs.access(backupFilePath)
         } catch {
@@ -76,7 +87,7 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
                             writeStream.on('finish', resolve)
                             writeStream.on('error', reject)
                         })
-                        isLocal = false
+                        downloadedRemoteFile = true
                     } else {
                         return res.status(404).send({ error: 'Backup file not found locally or remotely' })
                     }
@@ -88,9 +99,6 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             }
         }
 
-        const backupDir = getBackupDir(project)
-        await fs.mkdir(backupDir, { recursive: true })
-
         const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
         const newBackupFile = path.join(backupDir, `${DB}_${stamp}_pre_restore.dump`)
 
@@ -101,15 +109,26 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             throw new Error('Failed to create pre-restore backup')
         }
 
-        const command = `docker exec -i -e PGPASSWORD="${DB_PASSWORD}" ${containerId} pg_restore -U "${DB_USER}" -d "${DB}" < "${backupFilePath}"`
-        await execAsync(command)
+        await encryptBackupFile(newBackupFile)
 
-        if (!isLocal) {
-            await fs.unlink(backupFilePath).catch(() => {})
+        if (await isEncryptedBackupFile(backupFilePath)) {
+            restoreFilePath = `${backupFilePath}.restore.dump`
+            await decryptBackupFile(backupFilePath, restoreFilePath)
+            removeRestoreFile = true
         }
+
+        const command = `docker exec -i -e PGPASSWORD="${DB_PASSWORD}" ${containerId} pg_restore -U "${DB_USER}" -d "${DB}" < "${restoreFilePath}"`
+        await execAsync(command)
 
         res.send({ message: 'Backup restored successfully' })
     } catch (e: any) {
         res.status(500).send({ error: e.message })
+    } finally {
+        if (removeRestoreFile && restoreFilePath && restoreFilePath !== backupFilePath) {
+            await fs.unlink(restoreFilePath).catch(() => {})
+        }
+        if (downloadedRemoteFile && backupFilePath) {
+            await fs.unlink(backupFilePath).catch(() => {})
+        }
     }
 }
