@@ -10,6 +10,8 @@ import parseSlashTimestamp from './parseSlashTimestamp'
 function isBenignOperationalNoise(message: string, raw: string) {
     return /Failed to find Server Action "[a-f0-9]+"/i.test(message)
         || /Failed to find Server Action "[a-f0-9]+"/i.test(raw)
+        || /^Successfully added song .+ by .+, played by .+$/i.test(message)
+        || /^Adding song: '.+' by artist '.+' for user '.+'\.$/i.test(message)
 }
 
 function parseHttpAccessStatus(raw: string) {
