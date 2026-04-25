@@ -73,7 +73,7 @@ const config = {
         tail: 500
     },
     service: {
-        beekeeperToken: env.BEEKEEPER_TOKEN || ''
+        beekeeperToken: process.env.BEEKEEPER_TOKEN || process.env.INTERNAL_TOKEN || ''
     }
 }
 

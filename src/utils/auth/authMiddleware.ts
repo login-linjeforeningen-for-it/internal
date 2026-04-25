@@ -49,7 +49,15 @@ export default async function preHandler(req: FastifyRequest, res: FastifyReply)
     }
 
     const authHeader = req.headers.authorization
-    const service = req.headers.service
+    const serviceHeader = req.headers.service
+    const xServiceHeader = req.headers['x-service']
+    const xInternalServiceHeader = req.headers['x-internal-service']
+    const service = [
+        serviceHeader,
+        xServiceHeader,
+        xInternalServiceHeader,
+    ].find((value): value is string => typeof value === 'string' && value.length > 0)
+
     if (
         config.service.beekeeperToken
         && authHeader === `Bearer ${config.service.beekeeperToken}`
