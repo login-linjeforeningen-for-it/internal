@@ -48,6 +48,22 @@ export default async function preHandler(req: FastifyRequest, res: FastifyReply)
         return
     }
 
+    const authHeader = req.headers.authorization
+    const service = req.headers.service
+    if (
+        config.service.beekeeperToken
+        && authHeader === `Bearer ${config.service.beekeeperToken}`
+        && service === 'beekeeper'
+    ) {
+        req.user = {
+            id: 'service:beekeeper',
+            name: 'Beekeeper Service',
+            email: 'service@beekeeper.internal',
+            groups: [config.login.tekkom]
+        }
+        return
+    }
+
     const tokenResult = await validateToken(req, res)
     if (!tokenResult.valid || !tokenResult.userInfo || !tokenResult.userInfo.sub) {
         return res.status(401).send({ error: tokenResult.error || 'Invalid user information' })

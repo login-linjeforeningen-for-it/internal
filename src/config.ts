@@ -71,6 +71,9 @@ const config = {
     docker: {
         options: { maxBuffer: 12 * 1024 * 1024, timeout: 5000 },
         tail: 500
+    },
+    service: {
+        beekeeperToken: env.BEEKEEPER_TOKEN || ''
     }
 }
 
