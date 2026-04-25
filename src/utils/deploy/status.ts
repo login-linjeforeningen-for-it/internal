@@ -109,6 +109,20 @@ function parseSystemctlTimestampUs(raw: string | undefined) {
     return new Date(micros / 1000).toISOString()
 }
 
+function parseJournalTimestampUs(raw: string | undefined) {
+    const trimmed = raw?.trim()
+    if (!trimmed) {
+        return null
+    }
+
+    const micros = Number(trimmed)
+    if (!Number.isFinite(micros) || micros <= 0) {
+        return null
+    }
+
+    return new Date(micros / 1000).toISOString()
+}
+
 async function getSystemctlProperties(scope: 'user' | 'system', name: string, properties: string[]) {
     try {
         const { stdout } = await runCommand(`${getSystemctlCommand(scope)} show ${name} --property=${properties.join(',')}`)
@@ -127,6 +141,30 @@ async function getSystemctlProperties(scope: 'user' | 'system', name: string, pr
         return Object.fromEntries(properties.map(property => [property, values[property] ?? '']))
     } catch {
         return Object.fromEntries(properties.map(property => [property, '']))
+    }
+}
+
+async function getJournalTimestamp(scope: 'user' | 'system', unit: string) {
+    const journalCommand = scope === 'user'
+        ? `journalctl --user -u ${unit} -n 1 --output=json --no-pager`
+        : `journalctl -u ${unit} -n 1 --output=json --no-pager`
+
+    try {
+        const { stdout } = await runCommand(journalCommand, undefined, 2000)
+        const lastLine = stdout
+            .split('\n')
+            .map(line => line.trim())
+            .filter(Boolean)
+            .at(-1)
+
+        if (!lastLine) {
+            return null
+        }
+
+        const payload = JSON.parse(lastLine) as { __REALTIME_TIMESTAMP?: string }
+        return parseJournalTimestampUs(payload.__REALTIME_TIMESTAMP)
+    } catch {
+        return null
     }
 }
 
@@ -187,6 +225,8 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         serviceActive,
         timerProperties,
         serviceProperties,
+        journalLastDeploymentAt,
+        journalLastAutoDeployAt,
     ] = systemctlAvailable && unitScope !== 'none'
         ? await Promise.all([
             getSystemctlState(unitScope, timerUnit, 'is-enabled').then(state => state === 'enabled'),
@@ -194,13 +234,17 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
             getSystemctlState(unitScope, serviceUnit, 'is-active').then(state => state === 'active'),
             getSystemctlProperties(unitScope, timerUnit, ['LastTriggerUSec']),
             getSystemctlProperties(unitScope, serviceUnit, ['ActiveState', 'SubState', 'Result', 'ExecMainStartTimestampUSec']),
+            getJournalTimestamp(unitScope, serviceUnit),
+            getJournalTimestamp(unitScope, timerUnit),
         ])
         : [
             false,
             false,
             false,
             { LastTriggerUSec: '' },
-            { ActiveState: '', SubState: '', Result: '', ExecMainStartTimestampUSec: '' }
+            { ActiveState: '', SubState: '', Result: '', ExecMainStartTimestampUSec: '' },
+            null,
+            null,
         ]
 
     const result = {
@@ -223,8 +267,8 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         activeState: serviceProperties.ActiveState || 'unknown',
         subState: serviceProperties.SubState || 'unknown',
         lastResult: serviceProperties.Result || null,
-        lastDeploymentAt: parseSystemctlTimestampUs(serviceProperties.ExecMainStartTimestampUSec),
-        lastAutoDeployAt: parseSystemctlTimestampUs(timerProperties.LastTriggerUSec),
+        lastDeploymentAt: parseSystemctlTimestampUs(serviceProperties.ExecMainStartTimestampUSec) || journalLastDeploymentAt,
+        lastAutoDeployAt: parseSystemctlTimestampUs(timerProperties.LastTriggerUSec) || journalLastAutoDeployAt,
         error: gitState.error,
     }
 
