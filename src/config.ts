@@ -20,9 +20,7 @@ if (missingVariables.length > 0) {
     throw new Error(`Missing essential environment variables:\n    ${missingVariables}`)
 }
 
-const env = Object.fromEntries(
-    requiredEnvironmentVariables.map((key) => [key, process.env[key]])
-)
+const env = process.env as Record<string, string | undefined>
 const backupEncryptionKey = process.env.BACKUP_ENCRYPTION_KEY || ''
 
 const config = {
@@ -35,7 +33,7 @@ const config = {
         color: 0xfd8738
     },
     backup: {
-        path: '/home/dev/backups',
+        path: env.BACKUP_PATH || '/home/dev/backups',
         schedule: '0 22 * * *',
         retention: 7,
         encryption: {

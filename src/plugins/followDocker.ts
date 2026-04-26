@@ -1,20 +1,17 @@
-import pty from 'node-pty'
+import { spawn } from 'child_process'
 import { WebSocket } from 'ws'
 
 export default async function followDockerStats(connection: WebSocket) {
-    const dockerStats = pty.spawn('docker', ['stats', '--no-stream=false', '--format',
+    const dockerStats = spawn('docker', ['stats', '--no-stream=false', '--format',
         '{{.Container}}|{{.Name}}|{{.CPUPerc}}|{{.MemUsage}}|{{.MemPerc}}|{{.NetIO}}|{{.BlockIO}}|{{.PIDs}}'
     ], {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 24,
         cwd: process.env.HOME,
         env: process.env
     })
 
     let buffer = ''
-    dockerStats.onData((data) => {
-        buffer += data
+    dockerStats.stdout.on('data', (data) => {
+        buffer += data.toString()
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
@@ -41,7 +38,14 @@ export default async function followDockerStats(connection: WebSocket) {
         }
     })
 
-    dockerStats.onExit(({ exitCode }) => {
+    dockerStats.stderr.on('data', (data) => {
+        connection.send(JSON.stringify({
+            type: 'docker_stats_error',
+            message: data.toString().trim()
+        }))
+    })
+
+    dockerStats.on('exit', (exitCode) => {
         connection.send(JSON.stringify({
             type: 'docker_stats_exit',
             code: exitCode
