@@ -1,6 +1,7 @@
 import { ensureInternalSchema, getDbClient, query } from '#db'
 import getUniqueRunningImages from './getUniqueRunningImages.ts'
 import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
+import isDockerScoutUpdateNotice from './isDockerScoutUpdateNotice.ts'
 import pruneStaleImages from './pruneStaleImages.ts'
 
 const EMPTY_REPORT: VulnerabilityReportFile = {
@@ -109,8 +110,18 @@ function normalizeScannerResult(result: VulnerabilityScannerResult): Vulnerabili
         return result
     }
 
-    if (!isDockerScoutLimitedError(result.scanError || result.note || '')) {
+    if (!isDockerScoutLimitedError(result.scanError || result.note || '')
+        && !isDockerScoutUpdateNotice(result.scanError || result.note || '')) {
         return result
+    }
+
+    if (isDockerScoutUpdateNotice(result.scanError || result.note || '')) {
+        return {
+            ...result,
+            scanError: null,
+            summaryOnly: true,
+            note: null,
+        }
     }
 
     return {
@@ -129,7 +140,7 @@ function normalizeImageScanError(scanError: string | null) {
     const errors = scanError
         .split('|')
         .map((error) => error.trim())
-        .filter((error) => error && !isDockerScoutLimitedError(error))
+        .filter((error) => error && !isDockerScoutLimitedError(error) && !isDockerScoutUpdateNotice(error))
 
     return errors.length ? errors.join(' | ') : null
 }

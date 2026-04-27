@@ -16,6 +16,7 @@ import runDockerScoutScanRaw from './runDockerScoutScanRaw.ts'
 import runDockerScoutQuickviewRaw from './runDockerScoutQuickviewRaw.ts'
 import parseDockerScoutQuickview from './parseDockerScoutQuickview.ts'
 import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
+import isDockerScoutUpdateNotice from './isDockerScoutUpdateNotice.ts'
 import runTrivyScanRaw from './runTrivyScanRaw.ts'
 import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 
@@ -68,6 +69,20 @@ export default async function scanWithScanner(scanner: VulnerabilityScanner, ima
             note: null,
         }
     } catch (error: any) {
+        if (scanner === 'docker_scout' && isDockerScoutUpdateNotice(error)) {
+            return {
+                scanner,
+                scannedAt,
+                totalVulnerabilities: 0,
+                severity: emptySeverityCount(),
+                groups: [],
+                vulnerabilities: [],
+                scanError: null,
+                summaryOnly: true,
+                note: null,
+            }
+        }
+
         if (scanner === 'docker_scout' && isDockerScoutLimitedError(error)) {
             return await buildScoutQuickviewFallback(image, scannedAt, error)
         }
