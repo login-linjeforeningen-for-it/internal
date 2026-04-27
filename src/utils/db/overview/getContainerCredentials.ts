@@ -28,8 +28,8 @@ export default async function getContainerCredentials(container: QueryableContai
         fallbackEnv.POSTGRES_PASSWORD
     )
 
-    if (!DB || !DB_USER || !DB_PASSWORD) {
-        throw new Error('Missing database credentials in .env or runtime environment')
+    if (!DB || !DB_USER) {
+        throw new Error('Missing database name or user in .env or runtime environment')
     }
 
     return { DB, DB_USER, DB_PASSWORD }

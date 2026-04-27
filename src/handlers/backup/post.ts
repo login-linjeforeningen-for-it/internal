@@ -54,8 +54,8 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
 
         const { DB, DB_USER, DB_PASSWORD } = await getContainerCredentials({ id: containerId, workingDir })
 
-        if (!DB || !DB_USER || !DB_PASSWORD) {
-            return res.status(400).send({ error: 'Missing database credentials in .env' })
+        if (!DB || !DB_USER) {
+            return res.status(400).send({ error: 'Missing database name or user in .env' })
         }
 
         const backupDir = getBackupDir(project)
