@@ -32,7 +32,7 @@ const config = {
         color: 0xfd8738
     },
     backup: {
-        path: env.BACKUP_PATH || '/home/dev/backups',
+        path: env.BACKUP_PATH || '/backups',
         schedule: '0 22 * * *',
         retention: 7,
         encryption: {

@@ -4,10 +4,12 @@ import fs from 'fs/promises'
 import { createWriteStream } from 'fs'
 import path from 'path'
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { getBackupDir, getContainerEnv } from '#utils/backup/utils.ts'
+import { getBackupDir } from '#utils/backup/utils.ts'
 import getPostgresContainers from '#utils/backup/containers.ts'
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import config from '#config'
+import getContainerCredentials from '#utils/db/overview/getContainerCredentials.ts'
+import shellEscape from '#utils/db/overview/shellEscape.ts'
 import {
     decryptBackupFile,
     encryptBackupFile,
@@ -50,7 +52,7 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
              return res.status(400).send({ error: 'Container is not running' })
         }
 
-        const { DB, DB_USER, DB_PASSWORD } = await getContainerEnv(workingDir)
+        const { DB, DB_USER, DB_PASSWORD } = await getContainerCredentials({ id: containerId, workingDir })
 
         if (!DB || !DB_USER || !DB_PASSWORD) {
             return res.status(400).send({ error: 'Missing database credentials in .env' })
@@ -102,7 +104,16 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
         const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
         const newBackupFile = path.join(backupDir, `${DB}_${stamp}_pre_restore.dump`)
 
-        await execAsync(`docker exec -e PGPASSWORD="${DB_PASSWORD}" ${containerId} pg_dump -Fc -c -U "${DB_USER}" "${DB}" > "${newBackupFile}"`)
+        const preRestoreBackupCommand = [
+            'docker exec',
+            `-e PGPASSWORD=${shellEscape(DB_PASSWORD)}`,
+            shellEscape(containerId),
+            'pg_dump -Fc -c',
+            `-U ${shellEscape(DB_USER)}`,
+            shellEscape(DB),
+            `> ${shellEscape(newBackupFile)}`
+        ].join(' ')
+        await execAsync(preRestoreBackupCommand)
 
         if ((await fs.stat(newBackupFile)).size === 0) {
             await fs.unlink(newBackupFile).catch(() => { })
@@ -117,7 +128,15 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             removeRestoreFile = true
         }
 
-        const command = `docker exec -i -e PGPASSWORD="${DB_PASSWORD}" ${containerId} pg_restore -U "${DB_USER}" -d "${DB}" < "${restoreFilePath}"`
+        const command = [
+            'docker exec -i',
+            `-e PGPASSWORD=${shellEscape(DB_PASSWORD)}`,
+            shellEscape(containerId),
+            'pg_restore',
+            `-U ${shellEscape(DB_USER)}`,
+            `-d ${shellEscape(DB)}`,
+            `< ${shellEscape(restoreFilePath)}`
+        ].join(' ')
         await execAsync(command)
 
         res.send({ message: 'Backup restored successfully' })

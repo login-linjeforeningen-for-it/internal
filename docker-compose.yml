@@ -15,7 +15,7 @@ services:
       - .env
     environment:
       API_TOKEN: ${API_TOKEN:-}
-      BACKUP_PATH: /home/dev/backups
+      BACKUP_PATH: /backups
       DB: ${DB:-internal}
       DB_HOST: postgres
       DB_PASSWORD: ${DB_PASSWORD}
@@ -36,7 +36,7 @@ services:
       - /etc/nginx:/etc/nginx:ro
       - /usr/local/openresty/nginx:/usr/local/openresty/nginx:ro
       - internal_data:/app/data
-      - internal_backups:/home/dev/backups
+      - /backups:/backups
       - ${LOGIN_WORKSPACE_ROOT:-..}:/workspace
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8001/api >/dev/null 2>&1 || exit 1"]
@@ -66,5 +66,4 @@ services:
 
 volumes:
   internal_data:
-  internal_backups:
   internal_database:

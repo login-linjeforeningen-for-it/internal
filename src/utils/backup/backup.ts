@@ -12,7 +12,7 @@ import getContainerCredentials from '#utils/db/overview/getContainerCredentials.
 import shellEscape from '#utils/db/overview/shellEscape.ts'
 
 const execAsync = promisify(exec)
-const S3_UPLOAD_TIMEOUT_MS = Number(process.env.BACKUP_S3_UPLOAD_TIMEOUT_MS || 20_000)
+const S3_UPLOAD_TIMEOUT_MS = Number(process.env.BACKUP_S3_UPLOAD_TIMEOUT_MS || 10 * 60 * 1000)
 
 type BackupFailure = {
     container: string
