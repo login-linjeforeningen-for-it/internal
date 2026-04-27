@@ -9,5 +9,7 @@ export default function extractPackageType(vulnerability: any): string | null {
         packageObject?.manager,
         vulnerability?.ecosystem,
         vulnerability?.packageType,
+        vulnerability?.PkgType,
+        vulnerability?.Type,
     ])
 }

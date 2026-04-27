@@ -13,8 +13,8 @@ export default function formatScanError(error: any): string {
 
     const message = firstLine(error?.message)
     if (message.toLowerCase().startsWith('command failed:')) {
-        return 'Docker Scout scan command failed'
+        return 'Container vulnerability scan command failed'
     }
 
-    return message || 'Docker Scout scan failed'
+    return message || 'Container vulnerability scan failed'
 }

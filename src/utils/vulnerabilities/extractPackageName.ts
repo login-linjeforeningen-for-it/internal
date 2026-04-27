@@ -12,6 +12,8 @@ export default function extractPackageName(vulnerability: any): string | null {
         dependencyPackageObject?.name,
         dependencyObject?.name,
         vulnerability?.packageName,
+        vulnerability?.PkgName,
+        vulnerability?.PkgID,
         vulnerability?.package,
     ])
 }

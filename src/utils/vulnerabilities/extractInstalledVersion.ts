@@ -7,6 +7,7 @@ export default function extractInstalledVersion(vulnerability: any): string | nu
         packageObject?.version,
         packageObject?.installedVersion,
         vulnerability?.installedVersion,
+        vulnerability?.InstalledVersion,
         vulnerability?.version,
     ])
 }

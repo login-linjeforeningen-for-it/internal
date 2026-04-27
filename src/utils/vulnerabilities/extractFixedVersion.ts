@@ -6,6 +6,7 @@ export default function extractFixedVersion(vulnerability: any): string | null {
 
     return firstString([
         vulnerability?.fixedVersion,
+        vulnerability?.FixedVersion,
         fixObject?.version,
         fixObject?.versions?.[0],
         packageObject?.fixedVersion,
