@@ -2,6 +2,7 @@ import formatScanError from './formatScanError.ts'
 import getDockerScoutScanStatus from './getDockerScoutScanStatus.ts'
 import runDockerScoutScan from './runDockerScoutScan.ts'
 import { vulnerabilityScanRuntime } from './runtime.ts'
+import { saveVulnerabilityScanStatus } from './storage.ts'
 
 export default function triggerDockerScoutScanInBackground(): {
     started: boolean
@@ -26,6 +27,7 @@ export default function triggerDockerScoutScanInBackground(): {
         currentImage: null,
         estimatedCompletionAt: null,
     }
+    void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
 
     vulnerabilityScanRuntime.activeScan = runDockerScoutScan()
         .then((report) => {
@@ -36,6 +38,7 @@ export default function triggerDockerScoutScanInBackground(): {
                 currentImage: null,
                 estimatedCompletionAt: null,
             }
+            void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
             return report
         })
         .catch((error: any) => {
@@ -45,6 +48,7 @@ export default function triggerDockerScoutScanInBackground(): {
                 currentImage: null,
                 estimatedCompletionAt: null,
             }
+            void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
             throw error
         })
         .finally(() => {
@@ -54,6 +58,7 @@ export default function triggerDockerScoutScanInBackground(): {
                 finishedAt: new Date().toISOString(),
                 currentImage: null,
             }
+            void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
             vulnerabilityScanRuntime.activeScan = null
         })
 

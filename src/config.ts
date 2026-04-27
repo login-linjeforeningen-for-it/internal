@@ -1,4 +1,3 @@
-import path from 'path'
 import { envLoad } from 'utilbee'
 
 envLoad({ path: ['.env', '../.env'] })
@@ -49,7 +48,6 @@ const config = {
         }
     },
     vulnerability: {
-        path: path.join(process.cwd(), 'data', 'vulnerabilities.json'),
         schedule: '0 2 * * *'
     },
     queenbee: {

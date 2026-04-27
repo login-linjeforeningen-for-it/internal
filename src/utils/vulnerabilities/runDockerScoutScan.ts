@@ -1,10 +1,8 @@
-import fs from 'fs/promises'
-import path from 'path'
-import config from '#config'
 import getEstimatedCompletionAt from './getEstimatedCompletionAt.ts'
 import getUniqueRunningImages from './getUniqueRunningImages.ts'
 import scanImage from './scanImage.ts'
 import { vulnerabilityScanRuntime } from './runtime.ts'
+import { saveVulnerabilityReport, saveVulnerabilityScanStatus } from './storage.ts'
 
 export default async function runDockerScoutScan(): Promise<VulnerabilityReportFile> {
     const images = await getUniqueRunningImages()
@@ -17,6 +15,7 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
         currentImage: images[0] || null,
         estimatedCompletionAt: null,
     }
+    await saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
 
     for (const image of images) {
         vulnerabilityScanRuntime.scanStatus = {
@@ -26,6 +25,7 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
                 ? getEstimatedCompletionAt(vulnerabilityScanRuntime.scanStatus.startedAt, vulnerabilityScanRuntime.scanStatus.completedImages, images.length)
                 : null,
         }
+        await saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
 
         const result = await scanImage(image)
         scanned.push(result)
@@ -38,6 +38,7 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
                 ? getEstimatedCompletionAt(vulnerabilityScanRuntime.scanStatus.startedAt, scanned.length, images.length)
                 : null,
         }
+        await saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
     }
 
     const report: VulnerabilityReportFile = {
@@ -46,8 +47,7 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
         images: scanned,
     }
 
-    await fs.mkdir(path.dirname(config.vulnerability.path), { recursive: true })
-    await fs.writeFile(config.vulnerability.path, JSON.stringify(report, null, 2), 'utf8')
+    await saveVulnerabilityReport(report)
 
     return report
 }
