@@ -26,6 +26,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/nginx:/etc/nginx:ro
+      - /usr/local/openresty/nginx:/usr/local/openresty/nginx:ro
       - internal_data:/app/data
       - internal_backups:/home/dev/backups
       - ${LOGIN_WORKSPACE_ROOT:-..}:/workspace
