@@ -31,14 +31,15 @@ export default async function scanImage(image: string): Promise<ImageVulnerabili
         await fs.mkdir(cacheDir, { recursive: true })
         await fs.mkdir(reportDir, { recursive: true })
 
+        const storage = await getScannerStorage(cacheDir, reportDir, reportName)
+
         await execAsync(
             [
                 'docker run --rm',
                 '-v /var/run/docker.sock:/var/run/docker.sock',
-                `-v ${shellEscape(cacheDir)}:/root/.cache/trivy`,
-                `-v ${shellEscape(reportDir)}:/exports`,
+                ...storage.mounts,
                 'aquasec/trivy:latest image --scanners vuln --format json',
-                `--output ${shellEscape(`/exports/${reportName}`)}`,
+                `--output ${shellEscape(storage.outputPath)}`,
                 shellEscape(image),
             ].join(' '),
             { maxBuffer: 20 * 1024 * 1024 }
@@ -108,6 +109,38 @@ export default async function scanImage(image: string): Promise<ImageVulnerabili
     } finally {
         await fs.rm(reportPath, { force: true }).catch(() => undefined)
     }
+}
+
+async function getScannerStorage(cacheDir: string, reportDir: string, reportName: string) {
+    const dataVolume = await getInternalDataVolume()
+    if (dataVolume) {
+        return {
+            mounts: [
+                `-v ${shellEscape(dataVolume)}:/root/.cache/trivy`,
+                `-v ${shellEscape(dataVolume)}:/exports`,
+            ],
+            outputPath: `/exports/tmp/${reportName}`,
+        }
+    }
+
+    return {
+        mounts: [
+            `-v ${shellEscape(cacheDir)}:/root/.cache/trivy`,
+            `-v ${shellEscape(reportDir)}:/exports`,
+        ],
+        outputPath: `/exports/${reportName}`,
+    }
+}
+
+async function getInternalDataVolume(): Promise<string | null> {
+    const command = [
+        'docker inspect internal',
+        "--format '{{range .Mounts}}{{if eq .Destination \"/app/data\"}}{{.Name}}{{end}}{{end}}'",
+    ].join(' ')
+    const result = await execAsync(command, { maxBuffer: 1024 * 1024 }).catch(() => null)
+    const volume = result?.stdout.trim()
+
+    return volume || null
 }
 
 async function loadTrivyPayload(reportPath: string) {
