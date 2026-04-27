@@ -29,13 +29,12 @@ export default async function scanImage(image: string): Promise<ImageVulnerabili
     try {
         await fs.mkdir(reportDir, { recursive: true })
 
-        await execAsync(
-            `docker scout cves ${shellEscape(image)} --format gitlab --output ${shellEscape(reportPath)}`,
+        const primary = await execAsync(
+            `docker scout cves --format gitlab --output ${shellEscape(reportPath)} ${shellEscape(image)}`,
             { maxBuffer: 20 * 1024 * 1024 }
         )
 
-        const rawReport = await fs.readFile(reportPath, 'utf8')
-        const parsed = JSON.parse(rawReport)
+        const parsed = await loadScoutPayload(image, reportPath, primary.stdout)
         const vulnerabilities = collectVulnerabilities(parsed)
         const totalSeverity = emptySeverityCount()
         const grouped = new Map<string, VulnerabilityGroup>()
@@ -98,5 +97,51 @@ export default async function scanImage(image: string): Promise<ImageVulnerabili
         }
     } finally {
         await fs.rm(reportPath, { force: true }).catch(() => undefined)
+    }
+}
+
+async function loadScoutPayload(image: string, reportPath: string, stdout: string) {
+    const filePayload = await tryReadJsonFile(reportPath)
+    if (filePayload) {
+        return filePayload
+    }
+
+    const stdoutPayload = tryParseJson(stdout)
+    if (stdoutPayload) {
+        return stdoutPayload
+    }
+
+    const fallback = await execAsync(
+        `docker scout cves --format gitlab ${shellEscape(image)}`,
+        { maxBuffer: 20 * 1024 * 1024 }
+    ).catch(() => null)
+
+    const fallbackPayload = tryParseJson(fallback?.stdout || '')
+    if (fallbackPayload) {
+        return fallbackPayload
+    }
+
+    throw new Error(`Vulnerability scanner did not produce a readable JSON report at ${reportPath}`)
+}
+
+async function tryReadJsonFile(filePath: string) {
+    try {
+        const content = await fs.readFile(filePath, 'utf8')
+        return JSON.parse(content)
+    } catch {
+        return null
+    }
+}
+
+function tryParseJson(value: string) {
+    const trimmed = value.trim()
+    if (!trimmed) {
+        return null
+    }
+
+    try {
+        return JSON.parse(trimmed)
+    } catch {
+        return null
     }
 }
