@@ -133,6 +133,9 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             `-e PGPASSWORD=${shellEscape(DB_PASSWORD)}`,
             shellEscape(containerId),
             'pg_restore',
+            '--clean',
+            '--if-exists',
+            '--no-owner',
             `-U ${shellEscape(DB_USER)}`,
             `-d ${shellEscape(DB)}`,
             `< ${shellEscape(restoreFilePath)}`
