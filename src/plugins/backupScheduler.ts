@@ -16,8 +16,8 @@ export default async function backupScheduler(fastify: FastifyInstance) {
     cron.schedule(schedule, async () => {
         fastify.log.info('Starting scheduled database backup...')
         try {
-            await runBackup()
-            fastify.log.info('Database backup completed successfully.')
+            const result = await runBackup()
+            fastify.log.info(result, 'Database backup completed successfully.')
         } catch (err) {
             fastify.log.error(err, 'Database backup failed.')
         }

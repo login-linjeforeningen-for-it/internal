@@ -5,9 +5,11 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import { CronExpressionParser } from 'cron-parser'
 import { formatSize } from '#utils/format.ts'
-import { getBackupDir, getContainerEnv } from '#utils/backup/utils.ts'
+import { getBackupDir } from '#utils/backup/utils.ts'
 import getPostgresContainers from '#utils/backup/containers.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
+import getContainerCredentials from '#utils/db/overview/getContainerCredentials.ts'
+import shellEscape from '#utils/db/overview/shellEscape.ts'
 
 const execAsync = promisify(exec)
 
@@ -41,11 +43,9 @@ export default async function getBackupStats(_: FastifyRequest, res: FastifyRepl
             }
 
             try {
-                const { DB, DB_USER, DB_PASSWORD } = await getContainerEnv(workingDir)
+                const { DB, DB_USER, DB_PASSWORD } = await getContainerCredentials({ id, workingDir })
 
-                if (!DB || !DB_USER || !DB_PASSWORD) {
-                    info.error = 'Missing env vars'
-                } else if (!status.startsWith('Up')) {
+                if (!status.startsWith('Up')) {
                     info.error = 'Container not running'
                 }
 
@@ -53,7 +53,7 @@ export default async function getBackupStats(_: FastifyRequest, res: FastifyRepl
                 const [dbSize, stats] = await Promise.all([
                     info.dbSize === 'Unknown'
                         ? execAsync(
-                            `docker exec -e PGPASSWORD="${DB_PASSWORD}" ${id} psql -U "${DB_USER}" -d "${DB}" -t -c "SELECT pg_database_size('${DB}');"`
+                            `docker exec -e PGPASSWORD=${shellEscape(DB_PASSWORD)} ${shellEscape(id)} psql -U ${shellEscape(DB_USER)} -d ${shellEscape(DB)} -t -c ${shellEscape(`SELECT pg_database_size('${DB}');`)}`
                         ).then(r => r.stdout.trim()).catch(() => 'Unknown')
                         : Promise.resolve(info.dbSize),
                     fs.readdir(backupDir).then(async files => {
