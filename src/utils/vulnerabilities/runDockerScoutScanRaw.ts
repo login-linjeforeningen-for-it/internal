@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import parseJsonDocument from './parseJsonDocument.ts'
 import shellEscape from './shellEscape.ts'
 
 const execAsync = promisify(exec)
@@ -9,7 +10,7 @@ export default async function runDockerScoutScanRaw(image: string) {
 
     try {
         const { stdout } = await execAsync(command, { maxBuffer: 20 * 1024 * 1024 })
-        return JSON.parse(String(stdout))
+        return parseJsonDocument(String(stdout))
     } catch (error: any) {
         const stdout = typeof error?.stdout === 'string'
             ? error.stdout
@@ -19,7 +20,7 @@ export default async function runDockerScoutScanRaw(image: string) {
 
         if (stdout.trim()) {
             try {
-                return JSON.parse(stdout)
+                return parseJsonDocument(stdout)
             } catch {
                 // Fall back to the original error when stdout is not valid JSON.
             }
