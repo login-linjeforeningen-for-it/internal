@@ -19,6 +19,8 @@ import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
 import runTrivyScanRaw from './runTrivyScanRaw.ts'
 import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 
+const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
+
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
     & VulnerabilityScannerResult
 
@@ -98,7 +100,7 @@ async function buildScoutQuickviewFallback(image: string, scannedAt: string, err
             vulnerabilities: [],
             scanError: null,
             summaryOnly: true,
-            note: 'Docker Scout detailed CVE data is temporarily unavailable because the Docker login or rate limit was hit. Showing quickview summary only.',
+            note: 'Docker Scout detailed CVE data is unavailable for this image. Showing quickview summary only.',
         }
     } catch {
         return {
@@ -108,9 +110,9 @@ async function buildScoutQuickviewFallback(image: string, scannedAt: string, err
             severity: emptySeverityCount(),
             groups: [],
             vulnerabilities: [],
-            scanError: formatScanError(error),
-            summaryOnly: false,
-            note: null,
+            scanError: null,
+            summaryOnly: true,
+            note: SCOUT_UNAVAILABLE_NOTE,
         }
     }
 }

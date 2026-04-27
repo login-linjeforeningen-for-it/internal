@@ -7,7 +7,9 @@ import {
     CompleteMultipartUploadCommand,
     CreateMultipartUploadCommand,
     S3Client,
-    UploadPartCommand
+    UploadPartCommand,
+    type CreateMultipartUploadCommandOutput,
+    type UploadPartCommandOutput,
 } from '@aws-sdk/client-s3'
 import config from '#config'
 import getPostgresContainers from '#utils/backup/containers.ts'
@@ -37,7 +39,7 @@ async function uploadBackupToS3(s3: S3Client, bucket: string, key: string, encry
     let uploadId: string | undefined
 
     try {
-        const created = await sendS3WithTimeout(s3, new CreateMultipartUploadCommand({
+        const created = await sendS3WithTimeout<CreateMultipartUploadCommandOutput>(s3, new CreateMultipartUploadCommand({
             Bucket: bucket,
             Key: key,
             StorageClass: 'STANDARD_IA'
@@ -52,7 +54,7 @@ async function uploadBackupToS3(s3: S3Client, bucket: string, key: string, encry
         let partNumber = 1
         for (let offset = 0; offset < file.length; offset += S3_PART_SIZE) {
             const end = Math.min(offset + S3_PART_SIZE, file.length)
-            const uploaded = await sendS3WithTimeout(s3, new UploadPartCommand({
+            const uploaded = await sendS3WithTimeout<UploadPartCommandOutput>(s3, new UploadPartCommand({
                 Bucket: bucket,
                 Key: key,
                 UploadId: uploadId,
@@ -87,7 +89,7 @@ async function uploadBackupToS3(s3: S3Client, bucket: string, key: string, encry
     }
 }
 
-async function sendS3WithTimeout<T>(s3: S3Client, command: T) {
+async function sendS3WithTimeout<T>(s3: S3Client, command: any): Promise<T> {
     const controller = new AbortController()
     let timeout: NodeJS.Timeout | null = null
 
@@ -103,7 +105,7 @@ async function sendS3WithTimeout<T>(s3: S3Client, command: T) {
                     reject(new Error(`S3 request timed out after ${S3_UPLOAD_TIMEOUT_MS}ms`))
                 }, S3_UPLOAD_TIMEOUT_MS)
             })
-        ]) as Awaited<ReturnType<S3Client['send']>>
+        ]) as T
     } finally {
         if (timeout) {
             clearTimeout(timeout)

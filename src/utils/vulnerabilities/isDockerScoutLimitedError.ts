@@ -3,6 +3,7 @@ export default function isDockerScoutLimitedError(error: unknown) {
         (error as any)?.stderr
         || (error as any)?.stdout
         || (error as any)?.message
+        || error
         || ''
     ).toLowerCase()
 

@@ -1,5 +1,6 @@
 import { ensureInternalSchema, getDbClient, query } from '#db'
 import getUniqueRunningImages from './getUniqueRunningImages.ts'
+import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
 import pruneStaleImages from './pruneStaleImages.ts'
 
 const EMPTY_REPORT: VulnerabilityReportFile = {
@@ -19,6 +20,8 @@ const EMPTY_STATUS: DockerScoutScanStatus = {
     currentImage: null,
     estimatedCompletionAt: null,
 }
+
+const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
 
 type ReportRow = {
     generated_at: Date | string | null
@@ -71,16 +74,7 @@ export async function loadStoredVulnerabilityReport(): Promise<VulnerabilityRepo
         ORDER BY total_vulnerabilities DESC, image ASC
     `)
 
-    const normalizedImages = images.rows.map((row) => ({
-        image: row.image,
-        scannedAt: toIso(row.scanned_at) || new Date().toISOString(),
-        totalVulnerabilities: Number(row.total_vulnerabilities || 0),
-        severity: row.severity,
-        groups: Array.isArray(row.groups) ? row.groups : [],
-        vulnerabilities: Array.isArray(row.vulnerabilities) ? row.vulnerabilities : [],
-        scannerResults: Array.isArray(row.scanner_results) ? row.scanner_results : [],
-        scanError: row.scan_error,
-    }))
+    const normalizedImages = images.rows.map(normalizeImageRow)
     const runningImages = await getUniqueRunningImages().catch(() => null)
     const activeImages = runningImages
         ? await pruneStaleImages(normalizedImages, runningImages)
@@ -91,6 +85,53 @@ export async function loadStoredVulnerabilityReport(): Promise<VulnerabilityRepo
         imageCount: activeImages.length,
         images: activeImages,
     }
+}
+
+function normalizeImageRow(row: ImageRow): ImageVulnerabilityReport {
+    const scannerResults = Array.isArray(row.scanner_results)
+        ? row.scanner_results.map(normalizeScannerResult)
+        : []
+
+    return {
+        image: row.image,
+        scannedAt: toIso(row.scanned_at) || new Date().toISOString(),
+        totalVulnerabilities: Number(row.total_vulnerabilities || 0),
+        severity: row.severity,
+        groups: Array.isArray(row.groups) ? row.groups : [],
+        vulnerabilities: Array.isArray(row.vulnerabilities) ? row.vulnerabilities : [],
+        scannerResults,
+        scanError: normalizeImageScanError(row.scan_error),
+    }
+}
+
+function normalizeScannerResult(result: VulnerabilityScannerResult): VulnerabilityScannerResult {
+    if (result.scanner !== 'docker_scout') {
+        return result
+    }
+
+    if (!isDockerScoutLimitedError(result.scanError || result.note || '')) {
+        return result
+    }
+
+    return {
+        ...result,
+        scanError: null,
+        summaryOnly: true,
+        note: SCOUT_UNAVAILABLE_NOTE,
+    }
+}
+
+function normalizeImageScanError(scanError: string | null) {
+    if (!scanError) {
+        return null
+    }
+
+    const errors = scanError
+        .split('|')
+        .map((error) => error.trim())
+        .filter((error) => error && !isDockerScoutLimitedError(error))
+
+    return errors.length ? errors.join(' | ') : null
 }
 
 export async function saveVulnerabilityReport(report: VulnerabilityReportFile) {
