@@ -335,7 +335,11 @@ async function healStoredScanStatus(status: DockerScoutScanStatus) {
     )
     const generatedAt = toIso(report.rows[0]?.generated_at)
     if (!generatedAt || generatedAt < status.startedAt) {
-        return status
+        return {
+            ...status,
+            finishedAt: status.startedAt,
+            lastError: status.lastError || 'Scan was interrupted before it finished.',
+        }
     }
 
     const totalImages = Math.max(
