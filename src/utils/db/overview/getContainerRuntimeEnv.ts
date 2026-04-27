@@ -1,5 +1,6 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { normalizeEnvValue } from '#utils/backup/utils.ts'
 import shellEscape from './shellEscape.ts'
 
 const execAsync = promisify(exec)
@@ -19,7 +20,7 @@ export default async function getContainerRuntimeEnv(containerId: string) {
                     return [line, '']
                 }
 
-                return [line.slice(0, separatorIndex), line.slice(separatorIndex + 1)]
+                return [line.slice(0, separatorIndex), normalizeEnvValue(line.slice(separatorIndex + 1))]
             })
     )
 }

@@ -6,7 +6,9 @@ import path from 'path'
 export async function getContainerEnv(workingDir: string) {
     try {
         const envContent = await fs.readFile(path.join(workingDir, '.env'), 'utf-8')
-        return envParse(envContent)
+        return Object.fromEntries(
+            Object.entries(envParse(envContent)).map(([key, value]) => [key, normalizeEnvValue(value)])
+        )
     } catch {
         return {}
     }
@@ -14,4 +16,14 @@ export async function getContainerEnv(workingDir: string) {
 
 export function getBackupDir(project: string) {
     return path.join(config.backup.path, project)
+}
+
+export function normalizeEnvValue(value: string | null | undefined) {
+    const trimmed = value?.trim() || ''
+
+    if (['undefined', 'null', 'none'].includes(trimmed.toLowerCase())) {
+        return ''
+    }
+
+    return trimmed
 }
