@@ -156,6 +156,8 @@ interface VulnerabilityScannerResult {
     totalVulnerabilities: number
     severity: SeverityCount
     scanError: string | null
+    summaryOnly: boolean
+    note: string | null
 }
 
 interface ImageVulnerabilityReport {

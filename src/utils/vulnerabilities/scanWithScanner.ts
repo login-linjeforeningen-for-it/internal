@@ -13,6 +13,9 @@ import extractTitle from './extractTitle.ts'
 import extractVulnerabilityId from './extractVulnerabilityId.ts'
 import formatScanError from './formatScanError.ts'
 import runDockerScoutScanRaw from './runDockerScoutScanRaw.ts'
+import runDockerScoutQuickviewRaw from './runDockerScoutQuickviewRaw.ts'
+import parseDockerScoutQuickview from './parseDockerScoutQuickview.ts'
+import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
 import runTrivyScanRaw from './runTrivyScanRaw.ts'
 import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 
@@ -59,8 +62,14 @@ export default async function scanWithScanner(scanner: VulnerabilityScanner, ima
             groups: buildGroupBreakdown(sortedDetails),
             vulnerabilities: sortedDetails,
             scanError: null,
+            summaryOnly: false,
+            note: null,
         }
     } catch (error: any) {
+        if (scanner === 'docker_scout' && isDockerScoutLimitedError(error)) {
+            return await buildScoutQuickviewFallback(image, scannedAt, error)
+        }
+
         return {
             scanner,
             scannedAt,
@@ -69,6 +78,39 @@ export default async function scanWithScanner(scanner: VulnerabilityScanner, ima
             groups: [],
             vulnerabilities: [],
             scanError: formatScanError(error),
+            summaryOnly: false,
+            note: null,
+        }
+    }
+}
+
+async function buildScoutQuickviewFallback(image: string, scannedAt: string, error: unknown): Promise<ScannerImageReport> {
+    try {
+        const quickviewOutput = await runDockerScoutQuickviewRaw(image)
+        const quickview = parseDockerScoutQuickview(quickviewOutput)
+
+        return {
+            scanner: 'docker_scout',
+            scannedAt,
+            totalVulnerabilities: quickview.totalVulnerabilities,
+            severity: quickview.severity,
+            groups: [],
+            vulnerabilities: [],
+            scanError: null,
+            summaryOnly: true,
+            note: 'Docker Scout detailed CVE data is temporarily unavailable because the Docker login or rate limit was hit. Showing quickview summary only.',
+        }
+    } catch {
+        return {
+            scanner: 'docker_scout',
+            scannedAt,
+            totalVulnerabilities: 0,
+            severity: emptySeverityCount(),
+            groups: [],
+            vulnerabilities: [],
+            scanError: formatScanError(error),
+            summaryOnly: false,
+            note: null,
         }
     }
 }

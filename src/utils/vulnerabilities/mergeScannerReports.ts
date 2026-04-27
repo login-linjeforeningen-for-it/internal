@@ -29,12 +29,14 @@ export default function mergeScannerReports(image: string, reports: ScannerImage
     }
 
     const scannerResults = reports
-        .map(({ scanner, scannedAt, totalVulnerabilities, severity: scannerSeverity, scanError }) => ({
+        .map(({ scanner, scannedAt, totalVulnerabilities, severity: scannerSeverity, scanError, summaryOnly, note }) => ({
             scanner,
             scannedAt,
             totalVulnerabilities,
             severity: scannerSeverity,
             scanError,
+            summaryOnly,
+            note,
         }))
         .sort((left, right) => getScannerOrder(left.scanner) - getScannerOrder(right.scanner))
 
@@ -42,13 +44,24 @@ export default function mergeScannerReports(image: string, reports: ScannerImage
         .filter((result) => result.scanError)
         .map((result) => `${formatScannerName(result.scanner)}: ${result.scanError}`)
 
+    for (const result of scannerResults) {
+        for (const key of Object.keys(severity) as SeverityLevel[]) {
+            severity[key] = Math.max(severity[key], result.severity[key] || 0)
+        }
+    }
+
+    const totalFromSummaries = scannerResults.reduce(
+        (highest, result) => Math.max(highest, result.totalVulnerabilities),
+        0
+    )
+
     return {
         image,
         scannedAt: scannerResults
             .map((result) => result.scannedAt)
             .sort()
             .at(-1) || new Date().toISOString(),
-        totalVulnerabilities: vulnerabilities.length,
+        totalVulnerabilities: Math.max(vulnerabilities.length, totalFromSummaries),
         severity,
         groups: buildGroupBreakdown(vulnerabilities),
         vulnerabilities,
