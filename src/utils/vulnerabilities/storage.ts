@@ -1,4 +1,6 @@
 import { ensureInternalSchema, getDbClient, query } from '#db'
+import getUniqueRunningImages from './getUniqueRunningImages.ts'
+import pruneStaleImages from './pruneStaleImages.ts'
 
 const EMPTY_REPORT: VulnerabilityReportFile = {
     generatedAt: null,
@@ -30,6 +32,7 @@ type ImageRow = {
     severity: SeverityCount
     groups: VulnerabilityGroup[]
     vulnerabilities: VulnerabilityDetail[]
+    scanner_results: VulnerabilityScannerResult[]
     scan_error: string | null
 }
 
@@ -62,23 +65,31 @@ export async function loadStoredVulnerabilityReport(): Promise<VulnerabilityRepo
                severity,
                groups,
                vulnerabilities,
+               scanner_results,
                scan_error
         FROM vulnerability_report_images
         ORDER BY total_vulnerabilities DESC, image ASC
     `)
 
+    const normalizedImages = images.rows.map((row) => ({
+        image: row.image,
+        scannedAt: toIso(row.scanned_at) || new Date().toISOString(),
+        totalVulnerabilities: Number(row.total_vulnerabilities || 0),
+        severity: row.severity,
+        groups: Array.isArray(row.groups) ? row.groups : [],
+        vulnerabilities: Array.isArray(row.vulnerabilities) ? row.vulnerabilities : [],
+        scannerResults: Array.isArray(row.scanner_results) ? row.scanner_results : [],
+        scanError: row.scan_error,
+    }))
+    const runningImages = await getUniqueRunningImages().catch(() => null)
+    const activeImages = runningImages
+        ? await pruneStaleImages(normalizedImages, runningImages)
+        : normalizedImages
+
     return {
         generatedAt: toIso(report.rows[0].generated_at),
-        imageCount: Number(report.rows[0].image_count || images.rows.length),
-        images: images.rows.map((row) => ({
-            image: row.image,
-            scannedAt: toIso(row.scanned_at) || new Date().toISOString(),
-            totalVulnerabilities: Number(row.total_vulnerabilities || 0),
-            severity: row.severity,
-            groups: Array.isArray(row.groups) ? row.groups : [],
-            vulnerabilities: Array.isArray(row.vulnerabilities) ? row.vulnerabilities : [],
-            scanError: row.scan_error,
-        })),
+        imageCount: activeImages.length,
+        images: activeImages,
     }
 }
 
@@ -98,9 +109,10 @@ export async function saveVulnerabilityReport(report: VulnerabilityReportFile) {
                     severity,
                     groups,
                     vulnerabilities,
+                    scanner_results,
                     scan_error
                 )
-                VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7)
+                VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8)
             `, [
                 image.image,
                 image.scannedAt,
@@ -108,6 +120,7 @@ export async function saveVulnerabilityReport(report: VulnerabilityReportFile) {
                 JSON.stringify(image.severity),
                 JSON.stringify(image.groups),
                 JSON.stringify(image.vulnerabilities),
+                JSON.stringify(image.scannerResults || []),
                 image.scanError,
             ])
         }
@@ -127,6 +140,41 @@ export async function saveVulnerabilityReport(report: VulnerabilityReportFile) {
     } finally {
         client.release()
     }
+}
+
+export async function saveVulnerabilityImageResult(image: ImageVulnerabilityReport) {
+    await ensureInternalSchema()
+
+    await query(`
+        INSERT INTO vulnerability_report_images (
+            image,
+            scanned_at,
+            total_vulnerabilities,
+            severity,
+            groups,
+            vulnerabilities,
+            scanner_results,
+            scan_error
+        )
+        VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb, $8)
+        ON CONFLICT (image) DO UPDATE SET
+            scanned_at = EXCLUDED.scanned_at,
+            total_vulnerabilities = EXCLUDED.total_vulnerabilities,
+            severity = EXCLUDED.severity,
+            groups = EXCLUDED.groups,
+            vulnerabilities = EXCLUDED.vulnerabilities,
+            scanner_results = EXCLUDED.scanner_results,
+            scan_error = EXCLUDED.scan_error
+    `, [
+        image.image,
+        image.scannedAt,
+        image.totalVulnerabilities,
+        JSON.stringify(image.severity),
+        JSON.stringify(image.groups),
+        JSON.stringify(image.vulnerabilities),
+        JSON.stringify(image.scannerResults || []),
+        image.scanError,
+    ])
 }
 
 export async function loadStoredVulnerabilityScanStatus(): Promise<DockerScoutScanStatus> {

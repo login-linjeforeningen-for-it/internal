@@ -47,6 +47,7 @@ async function createInternalSchema() {
             severity jsonb NOT NULL DEFAULT '{}'::jsonb,
             groups jsonb NOT NULL DEFAULT '[]'::jsonb,
             vulnerabilities jsonb NOT NULL DEFAULT '[]'::jsonb,
+            scanner_results jsonb NOT NULL DEFAULT '[]'::jsonb,
             scan_error text
         );
 
@@ -63,5 +64,8 @@ async function createInternalSchema() {
             estimated_completion_at timestamptz,
             updated_at timestamptz NOT NULL DEFAULT now()
         );
+
+        ALTER TABLE vulnerability_report_images
+        ADD COLUMN IF NOT EXISTS scanner_results jsonb NOT NULL DEFAULT '[]'::jsonb;
     `)
 }

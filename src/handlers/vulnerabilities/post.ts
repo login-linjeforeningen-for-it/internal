@@ -7,14 +7,14 @@ export default async function runVulnerabilityScan(_: FastifyRequest, res: Fasti
 
         if (started) {
             res.status(202).send({
-                message: 'Docker Scout vulnerability scan started in background',
+                message: 'Container vulnerability scan started in background',
                 status
             })
             return
         }
 
         res.status(202).send({
-            message: 'Docker Scout vulnerability scan is already running',
+            message: 'Container vulnerability scan is already running',
             status
         })
     } catch (error) {

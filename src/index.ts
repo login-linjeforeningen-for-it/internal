@@ -8,6 +8,7 @@ import ws from './plugins/ws.ts'
 import backupScheduler from './plugins/backupScheduler.ts'
 import logAlertScheduler from './plugins/logAlertScheduler.ts'
 import vulnerabilityScheduler from './plugins/vulnerabilityScheduler.ts'
+import startScout from './utils/scouterbee/run.ts'
 import fs from 'fs'
 import path from 'path'
 import { installJsonConsoleLogger, log } from './utils/jsonLogger.ts'
@@ -61,6 +62,7 @@ fastify.get('/favicon.ico', getFavicon)
 
 async function start() {
     try {
+        await startScout()
         await fastify.listen({ port, host: '0.0.0.0' })
         log('info', 'Internal API started', {
             event: 'api.started',

@@ -50,6 +50,11 @@ const config = {
     vulnerability: {
         schedule: '0 2 * * *'
     },
+    scout: {
+        webhookUrl: env.WEBHOOK_URL || '',
+        criticalRole: env.CRITICAL_ROLE || '',
+        criticalDevelopmentRole: env.CRITICAL_DEVELOPMENT_ROLE || env.CRITICAL_ROLE_DEV || '',
+    },
     queenbee: {
         url: env.QUEENBEE_URL || 'https://queenbee.login.no',
     },

@@ -21,6 +21,7 @@ import getDashboardStats from './handlers/stats/getDashboard.ts'
 import getVulnerabilities from './handlers/vulnerabilities/get.ts'
 import runVulnerabilityScan from './handlers/vulnerabilities/post.ts'
 import getDatabaseOverview from './handlers/db/get.ts'
+import getScout from './handlers/scout/get.ts'
 
 export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPluginOptions) {
     // index
@@ -55,4 +56,8 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     // vulnerabilities
     fastify.get('/vulnerabilities', { preHandler }, getVulnerabilities)
     fastify.post('/vulnerabilities/scan', { preHandler }, runVulnerabilityScan)
+
+    // scout
+    fastify.get('/scout', { preHandler }, getScout)
+    fastify.get('/scouterbee', { preHandler }, getScout)
 }

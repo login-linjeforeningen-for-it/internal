@@ -2,7 +2,7 @@ import getEstimatedCompletionAt from './getEstimatedCompletionAt.ts'
 import getUniqueRunningImages from './getUniqueRunningImages.ts'
 import scanImage from './scanImage.ts'
 import { vulnerabilityScanRuntime } from './runtime.ts'
-import { saveVulnerabilityReport, saveVulnerabilityScanStatus } from './storage.ts'
+import { saveVulnerabilityImageResult, saveVulnerabilityReport, saveVulnerabilityScanStatus } from './storage.ts'
 
 export default async function runDockerScoutScan(): Promise<VulnerabilityReportFile> {
     const images = await getUniqueRunningImages()
@@ -29,6 +29,7 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
 
         const result = await scanImage(image)
         scanned.push(result)
+        await saveVulnerabilityImageResult(result)
 
         vulnerabilityScanRuntime.scanStatus = {
             ...vulnerabilityScanRuntime.scanStatus,

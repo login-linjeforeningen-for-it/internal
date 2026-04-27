@@ -12,6 +12,7 @@ services:
       postgres:
         condition: service_healthy
     env_file:
+      - ../beekeeper/.env
       - .env
     environment:
       API_TOKEN: ${API_TOKEN:-}
@@ -25,6 +26,7 @@ services:
       LOG_ALERTS_ENABLED: ${LOG_ALERTS_ENABLED:-false}
       NODE_ENV: production
       PORT: 8001
+      SCOUTERBEE_PROJECT_ROOT: ${SCOUTERBEE_PROJECT_ROOT:-/workspace}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:-local}
       S3_BUCKET: ${S3_BUCKET:-local}
       S3_ENDPOINT: ${S3_ENDPOINT:-http://localhost:9000}
@@ -32,6 +34,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-local}
       TZ: Europe/Oslo
     volumes:
+      - ${HOME}/.docker/config.json:/root/.docker/config.json:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/nginx:/etc/nginx:ro
       - /usr/local/openresty/nginx:/usr/local/openresty/nginx:ro
