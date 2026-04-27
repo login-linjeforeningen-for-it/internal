@@ -198,7 +198,7 @@ export async function loadStoredVulnerabilityScanStatus(): Promise<DockerScoutSc
         return { ...EMPTY_STATUS }
     }
 
-    return {
+    const normalizedStatus = {
         isRunning: false,
         startedAt: toIso(row.started_at),
         finishedAt: toIso(row.finished_at),
@@ -209,6 +209,13 @@ export async function loadStoredVulnerabilityScanStatus(): Promise<DockerScoutSc
         currentImage: null,
         estimatedCompletionAt: null,
     }
+
+    const healedStatus = await healStoredScanStatus(normalizedStatus)
+    if (healedStatus !== normalizedStatus) {
+        await saveVulnerabilityScanStatus(healedStatus)
+    }
+
+    return healedStatus
 }
 
 export async function saveVulnerabilityScanStatus(status: DockerScoutScanStatus) {
@@ -260,4 +267,36 @@ function toIso(value: Date | string | null | undefined) {
 
     const date = value instanceof Date ? value : new Date(value)
     return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+async function healStoredScanStatus(status: DockerScoutScanStatus) {
+    if (
+        status.isRunning
+        || status.finishedAt
+        || !status.startedAt
+    ) {
+        return status
+    }
+
+    const report = await query<ReportRow>(
+        'SELECT generated_at, image_count FROM vulnerability_reports WHERE id = 1'
+    )
+    const generatedAt = toIso(report.rows[0]?.generated_at)
+    if (!generatedAt || generatedAt < status.startedAt) {
+        return status
+    }
+
+    const totalImages = Math.max(
+        status.totalImages || 0,
+        Number(report.rows[0]?.image_count || 0),
+        status.completedImages
+    )
+
+    return {
+        ...status,
+        finishedAt: generatedAt,
+        lastSuccessAt: generatedAt,
+        totalImages,
+        completedImages: totalImages,
+    }
 }
