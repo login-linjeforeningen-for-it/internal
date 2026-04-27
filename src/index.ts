@@ -12,16 +12,16 @@ import startScout from './utils/scouterbee/run.ts'
 import fs from 'fs'
 import path from 'path'
 import { installJsonConsoleLogger, log } from './utils/jsonLogger.ts'
-import getServiceName from './utils/runtime/getServiceName.ts'
 
 process.env.TZ = 'Europe/Oslo'
 installJsonConsoleLogger()
+const SERVICE_NAME = 'internal'
 
 const fastify = Fastify({
     logger: {
         level: process.env.LOG_LEVEL ?? 'info',
         base: {
-            service: getServiceName(),
+            service: SERVICE_NAME,
             runtime: 'api',
             environment: process.env.NODE_ENV ?? 'development',
         },

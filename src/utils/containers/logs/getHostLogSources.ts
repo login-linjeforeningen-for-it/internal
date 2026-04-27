@@ -1,5 +1,5 @@
 import { existsSync } from 'fs'
-import { getDeployTargets } from '#utils/deploy/targets.ts'
+import getDeployTargets from '#utils/deploy/getDeployTargets.ts'
 import readTailFile from './readTailFile'
 import readFirstExistingFile from './readFirstExistingFile'
 import getHistoryCandidates from './getHistoryCandidates'

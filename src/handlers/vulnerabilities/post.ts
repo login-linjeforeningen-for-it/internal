@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import { triggerDockerScoutScanInBackground } from '#utils/vulnerabilities/scout.ts'
+import triggerDockerScoutScanInBackground from '#utils/vulnerabilities/triggerDockerScoutScanInBackground.ts'
 
 export default async function runVulnerabilityScan(_: FastifyRequest, res: FastifyReply) {
     try {

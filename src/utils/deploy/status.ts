@@ -1,12 +1,22 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
-import { type DeployTarget, getDeployServiceName, getDeployTimerName, getDeployTarget, getDeployTargets } from './targets.ts'
+import type { DeployTarget } from './defaultTargets.ts'
+import getDeployTarget from './getDeployTarget.ts'
+import getDeployTargets from './getDeployTargets.ts'
 
 const execAsync = promisify(exec)
 const STATUS_CACHE_TTL_MS = 60 * 1000
 const DEFAULT_COMMAND_TIMEOUT_MS = 2500
 const GIT_FETCH_TIMEOUT_MS = 4000
 const systemctlScopeCache = new Map<string, 'user' | 'system' | 'none'>()
+
+function getDeployServiceUnit(id: string) {
+    return `login-deploy@${id}.service`
+}
+
+function getDeployTimerUnit(id: string) {
+    return `login-deploy@${id}.timer`
+}
 
 export type DeployStatus = {
     id: string
@@ -209,8 +219,8 @@ export async function getDeploymentStatus(id: string): Promise<DeployStatus | nu
         return null
     }
 
-    const serviceUnit = getDeployServiceName(id)
-    const timerUnit = getDeployTimerName(id)
+    const serviceUnit = getDeployServiceUnit(id)
+    const timerUnit = getDeployTimerUnit(id)
     const [systemctlAvailable, gitState] = await Promise.all([
         hasSystemctl(),
         getGitState(target),
@@ -295,11 +305,12 @@ export async function runDeployment(id: string) {
     }
 
     if (await hasSystemctl()) {
-        const scope = await getSystemctlScope(getDeployServiceName(id))
+        const scope = await getSystemctlScope(getDeployServiceUnit(id))
         if (scope !== 'none') {
-            await runCommand(`${getSystemctlCommand(scope)} start ${getDeployServiceName(id)}`, undefined, 5000)
+            const serviceUnit = getDeployServiceUnit(id)
+            await runCommand(`${getSystemctlCommand(scope)} start ${serviceUnit}`, undefined, 5000)
             statusCache.delete(id)
-            return { ok: true, mode: scope === 'user' ? 'systemctl-user' : 'systemctl', service: getDeployServiceName(id) }
+            return { ok: true, mode: scope === 'user' ? 'systemctl-user' : 'systemctl', service: serviceUnit }
         }
     }
 
@@ -319,8 +330,8 @@ export async function setAutoDeploy(id: string, enabled: boolean) {
         throw new Error('systemctl is not available on this host')
     }
 
-    const timerUnit = getDeployTimerName(id)
-    const scope = await getSystemctlScope(getDeployServiceName(id))
+    const timerUnit = getDeployTimerUnit(id)
+    const scope = await getSystemctlScope(getDeployServiceUnit(id))
     if (scope === 'none') {
         throw new Error('No deploy unit is installed for this target')
     }
