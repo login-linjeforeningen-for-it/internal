@@ -12,6 +12,7 @@ import getContainerCredentials from '#utils/db/overview/getContainerCredentials.
 import shellEscape from '#utils/db/overview/shellEscape.ts'
 
 const execAsync = promisify(exec)
+const S3_UPLOAD_TIMEOUT_MS = Number(process.env.BACKUP_S3_UPLOAD_TIMEOUT_MS || 20_000)
 
 type BackupFailure = {
     container: string
@@ -23,6 +24,22 @@ export type BackupResult = {
     failures: BackupFailure[]
     backedUp: number
     discovered: number
+}
+
+async function uploadBackupToS3(s3: S3Client, bucket: string, key: string, encryptedFile: string) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), S3_UPLOAD_TIMEOUT_MS)
+
+    try {
+        await s3.send(new PutObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Body: createReadStream(encryptedFile),
+            StorageClass: 'STANDARD_IA'
+        }), { abortSignal: controller.signal })
+    } finally {
+        clearTimeout(timeout)
+    }
 }
 
 export async function runBackup() {
@@ -55,6 +72,7 @@ export async function runBackup() {
 
     await Promise.all(containers.map(async (container) => {
         const { id, name, project, workingDir } = container
+        let file: string | null = null
 
         if (!project || !workingDir) {
             result.failures.push({ container: name, error: 'Missing compose labels' })
@@ -69,7 +87,7 @@ export async function runBackup() {
             await fs.mkdir(dir, { recursive: true })
 
             const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
-            const file = path.join(dir, `${DB}_${stamp}.dump`)
+            file = path.join(dir, `${DB}_${stamp}.dump`)
             const command = [
                 'docker exec',
                 `-e PGPASSWORD=${shellEscape(DB_PASSWORD)}`,
@@ -91,14 +109,10 @@ export async function runBackup() {
             console.log(`\tSaved: ${encryptedFile}`)
 
             if (s3 && config.backup.s3.bucket) {
+                const key = `${project}/${path.basename(encryptedFile)}`
                 try {
-                    await s3.send(new PutObjectCommand({
-                        Bucket: config.backup.s3.bucket,
-                        Key: `${project}/${path.basename(encryptedFile)}`,
-                        Body: createReadStream(encryptedFile),
-                        StorageClass: 'STANDARD_IA'
-                    }))
-                    console.log(`\tUploaded to S3: ${project}/${path.basename(encryptedFile)}`)
+                    await uploadBackupToS3(s3, config.backup.s3.bucket, key, encryptedFile)
+                    console.log(`\tUploaded to S3: ${key}`)
                 } catch (e: any) {
                     const error = `S3 upload failed: ${e.message || e}`
                     result.failures.push({ container: name, error })
@@ -107,6 +121,9 @@ export async function runBackup() {
             }
         } catch (e: any) {
             const error = e.message || String(e)
+            if (file) {
+                await fs.unlink(file).catch(() => { })
+            }
             result.failures.push({ container: name, error })
             console.error(`\tFailed ${name}:`, error)
         }
