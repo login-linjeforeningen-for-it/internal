@@ -28,17 +28,32 @@ export type BackupResult = {
 
 async function uploadBackupToS3(s3: S3Client, bucket: string, key: string, encryptedFile: string) {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), S3_UPLOAD_TIMEOUT_MS)
+    const stream = createReadStream(encryptedFile)
+    let timeout: NodeJS.Timeout | null = null
 
     try {
-        await s3.send(new PutObjectCommand({
+        const upload = s3.send(new PutObjectCommand({
             Bucket: bucket,
             Key: key,
-            Body: createReadStream(encryptedFile),
+            Body: stream,
             StorageClass: 'STANDARD_IA'
         }), { abortSignal: controller.signal })
+        upload.catch(() => { })
+
+        await Promise.race([
+            upload,
+            new Promise((_, reject) => {
+                timeout = setTimeout(() => {
+                    controller.abort()
+                    stream.destroy()
+                    reject(new Error(`S3 upload timed out after ${S3_UPLOAD_TIMEOUT_MS}ms`))
+                }, S3_UPLOAD_TIMEOUT_MS)
+            })
+        ])
     } finally {
-        clearTimeout(timeout)
+        if (timeout) {
+            clearTimeout(timeout)
+        }
     }
 }
 
