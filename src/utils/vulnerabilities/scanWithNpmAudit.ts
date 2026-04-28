@@ -131,7 +131,7 @@ function getImageMatchKeys(image: string) {
 
 function getContainerNamesForImage(image: string) {
     try {
-        const output = execSync('docker ps --format "{{.Image}}\\t{{.Names}}"', {
+        const output = execSync('docker ps --format "{{.Image}}|{{.Names}}"', {
             encoding: 'utf8',
             maxBuffer: 1024 * 1024,
         })
@@ -141,7 +141,7 @@ function getContainerNamesForImage(image: string) {
             .map((line) => line.trim())
             .filter(Boolean)
             .map((line) => {
-                const [containerImage, name] = line.split('\t')
+                const [containerImage, name] = line.split('|')
                 return { containerImage, name }
             })
             .filter((entry) => entry.containerImage === image && entry.name)
