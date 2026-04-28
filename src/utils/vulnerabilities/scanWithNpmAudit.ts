@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import { execFileSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import buildGroupBreakdown from './buildGroupBreakdown.ts'
 import emptySeverityCount from './emptySeverityCount.ts'
 import formatScanError from './formatScanError.ts'
@@ -100,14 +100,45 @@ function buildSummaryOnly(scannedAt: string, note: string): ScannerImageReport {
 }
 
 function findPackageFolderForImage(image: string) {
-    const imageKey = normalizeKey(imageName(image))
+    const imageKeys = getImageMatchKeys(image)
     const folders = findPackageFolders(PROJECT_ROOT)
     const scored = folders
-        .map((folder) => ({ folder, score: getMatchScore(imageKey, folder) }))
+        .map((folder) => ({
+            folder,
+            score: Math.max(...imageKeys.map((imageKey) => getMatchScore(imageKey, folder))),
+        }))
         .filter((entry) => entry.score > 0)
         .sort((left, right) => right.score - left.score || left.folder.relativePath.localeCompare(right.folder.relativePath))
 
     return scored[0]?.folder || null
+}
+
+function getImageMatchKeys(image: string) {
+    return Array.from(new Set([imageName(image), ...getContainerNamesForImage(image)]
+        .map(normalizeKey)
+        .filter(Boolean)))
+}
+
+function getContainerNamesForImage(image: string) {
+    try {
+        const output = execSync('docker ps --format "{{.Image}}\\t{{.Names}}"', {
+            encoding: 'utf8',
+            maxBuffer: 1024 * 1024,
+        })
+
+        return output
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+                const [containerImage, name] = line.split('\t')
+                return { containerImage, name }
+            })
+            .filter((entry) => entry.containerImage === image && entry.name)
+            .map((entry) => entry.name)
+    } catch {
+        return []
+    }
 }
 
 function getMatchScore(imageKey: string, folder: PackageFolder) {
