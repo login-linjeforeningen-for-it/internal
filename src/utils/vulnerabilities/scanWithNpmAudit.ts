@@ -105,7 +105,7 @@ function findPackageFolderForImage(image: string) {
     const scored = folders
         .map((folder) => ({
             folder,
-            score: Math.max(...imageKeys.map((imageKey) => getMatchScore(imageKey, folder))),
+            score: Math.max(...imageKeys.map(({ key, bonus }) => getMatchScore(key, folder) + bonus)),
         }))
         .filter((entry) => entry.score > 0)
         .sort((left, right) => right.score - left.score || left.folder.relativePath.localeCompare(right.folder.relativePath))
@@ -114,9 +114,19 @@ function findPackageFolderForImage(image: string) {
 }
 
 function getImageMatchKeys(image: string) {
-    return Array.from(new Set([imageName(image), ...getContainerNamesForImage(image)]
-        .map(normalizeKey)
-        .filter(Boolean)))
+    const seen = new Set<string>()
+    const keys: Array<{ key: string, bonus: number }> = []
+    for (const [value, bonus] of [
+        [imageName(image), 0],
+        ...getContainerNamesForImage(image).map((name) => [name, 25] as const),
+    ] as const) {
+        const key = normalizeKey(value)
+        if (!key || seen.has(key)) continue
+        seen.add(key)
+        keys.push({ key, bonus })
+    }
+
+    return keys
 }
 
 function getContainerNamesForImage(image: string) {
