@@ -3,9 +3,10 @@ import { promisify } from 'util'
 import shellEscape from './shellEscape.ts'
 
 const execAsync = promisify(exec)
+const DOCKER_SCOUT_QUICKVIEW_TIMEOUT_SECONDS = 20
 
 export default async function runDockerScoutQuickviewRaw(image: string) {
-    const command = `docker scout quickview ${shellEscape(image)} 2>&1`
+    const command = `timeout -s KILL ${DOCKER_SCOUT_QUICKVIEW_TIMEOUT_SECONDS}s docker scout quickview ${shellEscape(image)} 2>&1`
     const { stdout } = await execAsync(command, { maxBuffer: 10 * 1024 * 1024 })
     return String(stdout)
 }
