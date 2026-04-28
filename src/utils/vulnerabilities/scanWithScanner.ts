@@ -167,6 +167,8 @@ function isScannerTimeout(error: any) {
     const message = String(error?.message || error || '').toLowerCase()
     return error?.killed
         || error?.signal === 'SIGTERM'
+        || error?.code === 124
+        || error?.code === 137
         || message.includes('timed out')
         || message.includes('timeout')
 }
