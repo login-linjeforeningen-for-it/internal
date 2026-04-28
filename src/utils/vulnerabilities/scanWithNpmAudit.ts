@@ -1,4 +1,5 @@
 import fs from 'fs'
+import os from 'os'
 import path from 'path'
 import { execFileSync, execSync } from 'child_process'
 import buildGroupBreakdown from './buildGroupBreakdown.ts'
@@ -173,10 +174,7 @@ function walkPackageFolders(root: string, relativePath: string, depth: number, f
         return
     }
 
-    if (
-        entries.some((entry) => entry.isFile() && entry.name === 'package.json')
-        && entries.some((entry) => entry.isFile() && entry.name === 'package-lock.json')
-    ) {
+    if (entries.some((entry) => entry.isFile() && entry.name === 'package.json')) {
         folders.push({
             directory,
             relativePath,
@@ -200,9 +198,13 @@ function readPackageName(packageJsonPath: string) {
 }
 
 function runNpmAudit(directory: string): NpmAuditReport {
+    const auditDirectory = fs.existsSync(path.join(directory, 'package-lock.json'))
+        ? directory
+        : prepareTemporaryAuditDirectory(directory)
+
     try {
         const output = execFileSync('npm', ['audit', '--omit=dev', '--json'], {
-            cwd: directory,
+            cwd: auditDirectory,
             encoding: 'utf8',
             env: {
                 ...process.env,
@@ -217,7 +219,30 @@ function runNpmAudit(directory: string): NpmAuditReport {
         const auditError = error as { stdout?: string | Buffer }
         if (!auditError.stdout) throw error
         return parseAuditOutput(Buffer.isBuffer(auditError.stdout) ? auditError.stdout.toString('utf8') : auditError.stdout)
+    } finally {
+        if (auditDirectory !== directory) {
+            fs.rmSync(auditDirectory, { recursive: true, force: true })
+        }
     }
+}
+
+function prepareTemporaryAuditDirectory(directory: string) {
+    const auditDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'npm-audit-'))
+    fs.copyFileSync(path.join(directory, 'package.json'), path.join(auditDirectory, 'package.json'))
+
+    execFileSync('npm', ['install', '--package-lock-only', '--ignore-scripts', '--omit=dev'], {
+        cwd: auditDirectory,
+        encoding: 'utf8',
+        env: {
+            ...process.env,
+            NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --max-old-space-size=192`.trim(),
+        },
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: 120_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    return auditDirectory
 }
 
 function parseAuditOutput(output: string): NpmAuditReport {
