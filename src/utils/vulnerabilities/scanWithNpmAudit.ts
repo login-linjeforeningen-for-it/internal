@@ -157,9 +157,6 @@ function getMatchScore(imageKey: string, folder: PackageFolder) {
     const pathKey = normalizeKey(folder.relativePath)
 
     if (imageKey === nameKey || imageKey === folderKey || imageKey === pathKey) return 100
-    if (pathKey.length >= 4 && imageKey.endsWith(pathKey)) return 80
-    if (nameKey.length >= 4 && imageKey.endsWith(nameKey)) return 70
-    if (folderKey.length >= 4 && imageKey.endsWith(folderKey)) return 60
 
     return 0
 }
