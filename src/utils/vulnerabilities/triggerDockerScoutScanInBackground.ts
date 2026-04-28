@@ -49,7 +49,7 @@ export default function triggerDockerScoutScanInBackground(): {
                 estimatedCompletionAt: null,
             }
             void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
-            throw error
+            return null
         })
         .finally(() => {
             vulnerabilityScanRuntime.scanStatus = {

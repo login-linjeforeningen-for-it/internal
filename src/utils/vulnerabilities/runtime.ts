@@ -1,5 +1,5 @@
 export const vulnerabilityScanRuntime: {
-    activeScan: Promise<VulnerabilityReportFile> | null
+    activeScan: Promise<VulnerabilityReportFile | null> | null
     scanStatus: DockerScoutScanStatus
 } = {
     activeScan: null,
