@@ -1,16 +1,21 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
 import parseJsonDocument from './parseJsonDocument.ts'
-import shellEscape from './shellEscape.ts'
+import runProcessText from './runProcessText.ts'
 
-const execAsync = promisify(exec)
 const DOCKER_SCOUT_TIMEOUT_SECONDS = 45
 
 export default async function runDockerScoutScanRaw(image: string) {
-    const command = `timeout -s KILL ${DOCKER_SCOUT_TIMEOUT_SECONDS}s docker scout cves local://${shellEscape(image)} --format sarif`
-
     try {
-        const { stdout } = await execAsync(command, { maxBuffer: 20 * 1024 * 1024 })
+        const { stdout } = await runProcessText([
+            'docker',
+            'scout',
+            'cves',
+            `local://${image}`,
+            '--format',
+            'sarif',
+        ], {
+            maxBuffer: 20 * 1024 * 1024,
+            timeoutMs: DOCKER_SCOUT_TIMEOUT_SECONDS * 1000,
+        })
         return parseJsonDocument(String(stdout))
     } catch (error: any) {
         const stdout = typeof error?.stdout === 'string'

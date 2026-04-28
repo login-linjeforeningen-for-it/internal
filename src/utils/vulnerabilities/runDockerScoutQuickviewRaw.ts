@@ -1,12 +1,16 @@
-import { exec } from 'child_process'
-import { promisify } from 'util'
-import shellEscape from './shellEscape.ts'
+import runProcessText from './runProcessText.ts'
 
-const execAsync = promisify(exec)
 const DOCKER_SCOUT_QUICKVIEW_TIMEOUT_SECONDS = 20
 
 export default async function runDockerScoutQuickviewRaw(image: string) {
-    const command = `timeout -s KILL ${DOCKER_SCOUT_QUICKVIEW_TIMEOUT_SECONDS}s docker scout quickview ${shellEscape(image)} 2>&1`
-    const { stdout } = await execAsync(command, { maxBuffer: 10 * 1024 * 1024 })
-    return String(stdout)
+    const { stdout, stderr } = await runProcessText([
+        'docker',
+        'scout',
+        'quickview',
+        image,
+    ], {
+        maxBuffer: 10 * 1024 * 1024,
+        timeoutMs: DOCKER_SCOUT_QUICKVIEW_TIMEOUT_SECONDS * 1000,
+    })
+    return `${stdout}${stderr}`
 }
