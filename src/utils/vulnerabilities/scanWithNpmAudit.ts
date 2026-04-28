@@ -51,7 +51,7 @@ export default async function scanWithNpmAudit(image: string): Promise<ScannerIm
     try {
         const project = findPackageFolderForImage(image)
         if (!project) {
-            return buildSummaryOnly(scannedAt, 'No matching package.json folder was found for this running image.')
+            return null
         }
 
         const report = runNpmAudit(project.directory)
