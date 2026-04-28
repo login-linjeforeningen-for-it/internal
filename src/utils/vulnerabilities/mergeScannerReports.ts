@@ -71,5 +71,13 @@ export default function mergeScannerReports(image: string, reports: ScannerImage
 }
 
 function formatScannerName(scanner: VulnerabilityScanner) {
-    return scanner === 'docker_scout' ? 'Docker Scout' : 'Trivy'
+    if (scanner === 'docker_scout') {
+        return 'Docker Scout'
+    }
+
+    if (scanner === 'npm_audit') {
+        return 'npm audit'
+    }
+
+    return 'Trivy'
 }
