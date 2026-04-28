@@ -105,7 +105,10 @@ function findPackageFolderForImage(image: string) {
     const scored = folders
         .map((folder) => ({
             folder,
-            score: Math.max(...imageKeys.map(({ key, bonus }) => getMatchScore(key, folder) + bonus)),
+            score: Math.max(...imageKeys.map(({ key, bonus }) => {
+                const score = getMatchScore(key, folder)
+                return score > 0 ? score + bonus : 0
+            })),
         }))
         .filter((entry) => entry.score > 0)
         .sort((left, right) => right.score - left.score || left.folder.relativePath.localeCompare(right.folder.relativePath))
