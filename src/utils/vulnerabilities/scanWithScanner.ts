@@ -16,11 +16,13 @@ import runDockerScoutScanRaw from './runDockerScoutScanRaw.ts'
 import runDockerScoutQuickviewRaw from './runDockerScoutQuickviewRaw.ts'
 import parseDockerScoutQuickview from './parseDockerScoutQuickview.ts'
 import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
+import isDockerScoutIndexingNotice from './isDockerScoutIndexingNotice.ts'
 import isDockerScoutUpdateNotice from './isDockerScoutUpdateNotice.ts'
 import runTrivyScanRaw from './runTrivyScanRaw.ts'
 import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 
 const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
+const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image. Showing Trivy results until Scout details are ready.'
 
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
     & VulnerabilityScannerResult
@@ -80,6 +82,20 @@ export default async function scanWithScanner(scanner: VulnerabilityScanner, ima
                 scanError: null,
                 summaryOnly: true,
                 note: null,
+            }
+        }
+
+        if (scanner === 'docker_scout' && isDockerScoutIndexingNotice(error)) {
+            return {
+                scanner,
+                scannedAt,
+                totalVulnerabilities: 0,
+                severity: emptySeverityCount(),
+                groups: [],
+                vulnerabilities: [],
+                scanError: null,
+                summaryOnly: true,
+                note: SCOUT_INDEXING_NOTE,
             }
         }
 

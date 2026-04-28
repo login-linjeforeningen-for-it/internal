@@ -1,5 +1,6 @@
 import { ensureInternalSchema, getDbClient, query } from '#db'
 import getUniqueRunningImages from './getUniqueRunningImages.ts'
+import isDockerScoutIndexingNotice from './isDockerScoutIndexingNotice.ts'
 import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
 import isDockerScoutUpdateNotice from './isDockerScoutUpdateNotice.ts'
 import pruneStaleImages from './pruneStaleImages.ts'
@@ -23,6 +24,7 @@ const EMPTY_STATUS: DockerScoutScanStatus = {
 }
 
 const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
+const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image. Showing Trivy results until Scout details are ready.'
 
 type ReportRow = {
     generated_at: Date | string | null
@@ -110,17 +112,28 @@ function normalizeScannerResult(result: VulnerabilityScannerResult): Vulnerabili
         return result
     }
 
-    if (!isDockerScoutLimitedError(result.scanError || result.note || '')
-        && !isDockerScoutUpdateNotice(result.scanError || result.note || '')) {
+    const message = result.scanError || result.note || ''
+    if (!isDockerScoutLimitedError(message)
+        && !isDockerScoutIndexingNotice(message)
+        && !isDockerScoutUpdateNotice(message)) {
         return result
     }
 
-    if (isDockerScoutUpdateNotice(result.scanError || result.note || '')) {
+    if (isDockerScoutUpdateNotice(message)) {
         return {
             ...result,
             scanError: null,
             summaryOnly: true,
             note: null,
+        }
+    }
+
+    if (isDockerScoutIndexingNotice(message)) {
+        return {
+            ...result,
+            scanError: null,
+            summaryOnly: true,
+            note: SCOUT_INDEXING_NOTE,
         }
     }
 
@@ -140,7 +153,10 @@ function normalizeImageScanError(scanError: string | null) {
     const errors = scanError
         .split('|')
         .map((error) => error.trim())
-        .filter((error) => error && !isDockerScoutLimitedError(error) && !isDockerScoutUpdateNotice(error))
+        .filter((error) => error
+            && !isDockerScoutLimitedError(error)
+            && !isDockerScoutIndexingNotice(error)
+            && !isDockerScoutUpdateNotice(error))
 
     return errors.length ? errors.join(' | ') : null
 }
