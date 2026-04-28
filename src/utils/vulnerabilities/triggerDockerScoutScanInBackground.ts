@@ -4,6 +4,12 @@ import runDockerScoutScan from './runDockerScoutScan.ts'
 import { vulnerabilityScanRuntime } from './runtime.ts'
 import { saveVulnerabilityScanStatus } from './storage.ts'
 
+function saveScanStatusBestEffort(status: DockerScoutScanStatus) {
+    void saveVulnerabilityScanStatus(status).catch((error) => {
+        console.error('Failed to save vulnerability scan status:', error)
+    })
+}
+
 export default function triggerDockerScoutScanInBackground(): {
     started: boolean
     status: DockerScoutScanStatus
@@ -27,7 +33,7 @@ export default function triggerDockerScoutScanInBackground(): {
         currentImage: null,
         estimatedCompletionAt: null,
     }
-    void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
+    saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
 
     vulnerabilityScanRuntime.activeScan = runDockerScoutScan()
         .then((report) => {
@@ -38,7 +44,7 @@ export default function triggerDockerScoutScanInBackground(): {
                 currentImage: null,
                 estimatedCompletionAt: null,
             }
-            void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
+            saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
             return report
         })
         .catch((error: any) => {
@@ -48,7 +54,7 @@ export default function triggerDockerScoutScanInBackground(): {
                 currentImage: null,
                 estimatedCompletionAt: null,
             }
-            void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
+            saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
             return null
         })
         .finally(() => {
@@ -58,7 +64,7 @@ export default function triggerDockerScoutScanInBackground(): {
                 finishedAt: new Date().toISOString(),
                 currentImage: null,
             }
-            void saveVulnerabilityScanStatus(vulnerabilityScanRuntime.scanStatus)
+            saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
             vulnerabilityScanRuntime.activeScan = null
         })
 
