@@ -3,7 +3,6 @@ import path from 'path'
 import { execFileSync, execSync } from 'child_process'
 import buildGroupBreakdown from './buildGroupBreakdown.ts'
 import emptySeverityCount from './emptySeverityCount.ts'
-import formatScanError from './formatScanError.ts'
 import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 
 const PROJECT_ROOT = path.resolve(process.env.SCOUTERBEE_PROJECT_ROOT || process.env.DEPLOY_ROOT || '/workspace')
@@ -52,7 +51,7 @@ export default async function scanWithNpmAudit(image: string): Promise<ScannerIm
     try {
         const project = findPackageFolderForImage(image)
         if (!project) {
-            return buildSummaryOnly(scannedAt, 'No matching package.json folder was found for this running image.')
+            return null
         }
 
         const report = runNpmAudit(project.directory)
@@ -70,18 +69,11 @@ export default async function scanWithNpmAudit(image: string): Promise<ScannerIm
             summaryOnly: false,
             note: `Audited ${project.relativePath || project.name || project.directory}`,
         }
-    } catch (error) {
-        return {
-            scanner: 'npm_audit',
+    } catch (error: any) {
+        return buildSummaryOnly(
             scannedAt,
-            totalVulnerabilities: 0,
-            severity: emptySeverityCount(),
-            groups: [],
-            vulnerabilities: [],
-            scanError: formatScanError(error),
-            summaryOnly: false,
-            note: null,
-        }
+            `npm audit was skipped because it did not return a usable report: ${formatAuditSkipReason(error)}`
+        )
     }
 }
 
@@ -181,7 +173,10 @@ function walkPackageFolders(root: string, relativePath: string, depth: number, f
         return
     }
 
-    if (entries.some((entry) => entry.isFile() && entry.name === 'package.json')) {
+    if (
+        entries.some((entry) => entry.isFile() && entry.name === 'package.json')
+        && entries.some((entry) => entry.isFile() && entry.name === 'package-lock.json')
+    ) {
         folders.push({
             directory,
             relativePath,
@@ -206,9 +201,13 @@ function readPackageName(packageJsonPath: string) {
 
 function runNpmAudit(directory: string): NpmAuditReport {
     try {
-        const output = execFileSync('npm', ['audit', '--json'], {
+        const output = execFileSync('npm', ['audit', '--omit=dev', '--json'], {
             cwd: directory,
             encoding: 'utf8',
+            env: {
+                ...process.env,
+                NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --max-old-space-size=192`.trim(),
+            },
             maxBuffer: 16 * 1024 * 1024,
             timeout: 60_000,
             stdio: ['ignore', 'pipe', 'pipe'],
@@ -224,6 +223,14 @@ function runNpmAudit(directory: string): NpmAuditReport {
 function parseAuditOutput(output: string): NpmAuditReport {
     if (!output.trim()) throw new Error('npm audit returned empty output.')
     return JSON.parse(output) as NpmAuditReport
+}
+
+function formatAuditSkipReason(error: any) {
+    if (error?.killed || error?.signal || error?.code === 'ETIMEDOUT') {
+        return 'timed out'
+    }
+
+    return String(error?.message || error || 'unknown reason').split('\n')[0]
 }
 
 function buildVulnerabilityDetails(report: NpmAuditReport, project: PackageFolder): VulnerabilityDetail[] {
