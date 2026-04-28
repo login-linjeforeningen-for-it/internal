@@ -24,6 +24,7 @@ import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
 const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image. Showing Trivy results until Scout details are ready.'
 const SCOUT_TIMEOUT_NOTE = 'Docker Scout timed out for this image. Showing Trivy results until Scout details are ready.'
+const SCOUT_DEFERRED_NOTE = 'Docker Scout detailed scans are deferred on this host. Showing Trivy results for the full image scan.'
 
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
     & VulnerabilityScannerResult
@@ -31,10 +32,22 @@ type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' |
 export default async function scanWithScanner(scanner: VulnerabilityScanner, image: string): Promise<ScannerImageReport> {
     const scannedAt = new Date().toISOString()
 
+    if (scanner === 'docker_scout') {
+        return {
+            scanner,
+            scannedAt,
+            totalVulnerabilities: 0,
+            severity: emptySeverityCount(),
+            groups: [],
+            vulnerabilities: [],
+            scanError: null,
+            summaryOnly: true,
+            note: SCOUT_DEFERRED_NOTE,
+        }
+    }
+
     try {
-        const parsed = scanner === 'docker_scout'
-            ? await runDockerScoutScanRaw(image)
-            : await runTrivyScanRaw(image)
+        const parsed = await runTrivyScanRaw(image)
         const vulnerabilities = collectVulnerabilities(parsed)
         const severity = emptySeverityCount()
         const details: VulnerabilityDetail[] = []
@@ -72,52 +85,6 @@ export default async function scanWithScanner(scanner: VulnerabilityScanner, ima
             note: null,
         }
     } catch (error: any) {
-        if (scanner === 'docker_scout' && isDockerScoutUpdateNotice(error)) {
-            return {
-                scanner,
-                scannedAt,
-                totalVulnerabilities: 0,
-                severity: emptySeverityCount(),
-                groups: [],
-                vulnerabilities: [],
-                scanError: null,
-                summaryOnly: true,
-                note: null,
-            }
-        }
-
-        if (scanner === 'docker_scout' && isDockerScoutIndexingNotice(error)) {
-            return {
-                scanner,
-                scannedAt,
-                totalVulnerabilities: 0,
-                severity: emptySeverityCount(),
-                groups: [],
-                vulnerabilities: [],
-                scanError: null,
-                summaryOnly: true,
-                note: SCOUT_INDEXING_NOTE,
-            }
-        }
-
-        if (scanner === 'docker_scout' && isScannerTimeout(error)) {
-            return {
-                scanner,
-                scannedAt,
-                totalVulnerabilities: 0,
-                severity: emptySeverityCount(),
-                groups: [],
-                vulnerabilities: [],
-                scanError: null,
-                summaryOnly: true,
-                note: SCOUT_TIMEOUT_NOTE,
-            }
-        }
-
-        if (scanner === 'docker_scout' && isDockerScoutLimitedError(error)) {
-            return await buildScoutQuickviewFallback(image, scannedAt, error)
-        }
-
         return {
             scanner,
             scannedAt,
