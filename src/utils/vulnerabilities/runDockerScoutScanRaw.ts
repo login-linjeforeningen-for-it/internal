@@ -4,12 +4,16 @@ import parseJsonDocument from './parseJsonDocument.ts'
 import shellEscape from './shellEscape.ts'
 
 const execAsync = promisify(exec)
+const DOCKER_SCOUT_TIMEOUT_MS = 45_000
 
 export default async function runDockerScoutScanRaw(image: string) {
     const command = `docker scout cves local://${shellEscape(image)} --format sarif`
 
     try {
-        const { stdout } = await execAsync(command, { maxBuffer: 20 * 1024 * 1024 })
+        const { stdout } = await execAsync(command, {
+            maxBuffer: 20 * 1024 * 1024,
+            timeout: DOCKER_SCOUT_TIMEOUT_MS,
+        })
         return parseJsonDocument(String(stdout))
     } catch (error: any) {
         const stdout = typeof error?.stdout === 'string'

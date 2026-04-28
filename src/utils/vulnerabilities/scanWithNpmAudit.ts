@@ -46,13 +46,13 @@ type NpmAuditReport = {
     vulnerabilities?: Record<string, NpmAuditVulnerability>
 }
 
-export default async function scanWithNpmAudit(image: string): Promise<ScannerImageReport> {
+export default async function scanWithNpmAudit(image: string): Promise<ScannerImageReport | null> {
     const scannedAt = new Date().toISOString()
 
     try {
         const project = findPackageFolderForImage(image)
         if (!project) {
-            return buildSummaryOnly(scannedAt, 'No matching package.json folder was found for this running image.')
+            return null
         }
 
         const report = runNpmAudit(project.directory)
@@ -207,6 +207,7 @@ function runNpmAudit(directory: string): NpmAuditReport {
             cwd: directory,
             encoding: 'utf8',
             maxBuffer: 16 * 1024 * 1024,
+            timeout: 60_000,
             stdio: ['ignore', 'pipe', 'pipe'],
         })
         return parseAuditOutput(output)

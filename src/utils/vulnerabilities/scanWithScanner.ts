@@ -23,6 +23,7 @@ import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 
 const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
 const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image. Showing Trivy results until Scout details are ready.'
+const SCOUT_TIMEOUT_NOTE = 'Docker Scout timed out for this image. Showing Trivy results until Scout details are ready.'
 
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
     & VulnerabilityScannerResult
@@ -99,6 +100,20 @@ export default async function scanWithScanner(scanner: VulnerabilityScanner, ima
             }
         }
 
+        if (scanner === 'docker_scout' && isScannerTimeout(error)) {
+            return {
+                scanner,
+                scannedAt,
+                totalVulnerabilities: 0,
+                severity: emptySeverityCount(),
+                groups: [],
+                vulnerabilities: [],
+                scanError: null,
+                summaryOnly: true,
+                note: SCOUT_TIMEOUT_NOTE,
+            }
+        }
+
         if (scanner === 'docker_scout' && isDockerScoutLimitedError(error)) {
             return await buildScoutQuickviewFallback(image, scannedAt, error)
         }
@@ -146,4 +161,12 @@ async function buildScoutQuickviewFallback(image: string, scannedAt: string, err
             note: SCOUT_UNAVAILABLE_NOTE,
         }
     }
+}
+
+function isScannerTimeout(error: any) {
+    const message = String(error?.message || error || '').toLowerCase()
+    return error?.killed
+        || error?.signal === 'SIGTERM'
+        || message.includes('timed out')
+        || message.includes('timeout')
 }
