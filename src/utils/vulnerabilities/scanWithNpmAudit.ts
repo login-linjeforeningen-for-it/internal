@@ -86,7 +86,7 @@ function buildSummaryOnly(scannedAt: string, note: string): ScannerImageReport {
         severity: emptySeverityCount(),
         groups: [],
         vulnerabilities: [],
-        scanError: null,
+        scanError: note,
         summaryOnly: true,
         note,
     }
@@ -230,7 +230,7 @@ function prepareTemporaryAuditDirectory(directory: string) {
     const auditDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'npm-audit-'))
     fs.copyFileSync(path.join(directory, 'package.json'), path.join(auditDirectory, 'package.json'))
 
-    execFileSync('npm', ['install', '--package-lock-only', '--ignore-scripts', '--omit=dev'], {
+    execFileSync('npm', ['install', '--package-lock-only', '--ignore-scripts', '--omit=dev', '--legacy-peer-deps'], {
         cwd: auditDirectory,
         encoding: 'utf8',
         env: {
