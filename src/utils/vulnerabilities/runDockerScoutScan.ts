@@ -13,68 +13,9 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
     const totalTargets = images.length + npmProjectCount
     const scanned: ImageVulnerabilityReport[] = []
 
-    vulnerabilityScanRuntime.scanStatus = {
-        ...vulnerabilityScanRuntime.scanStatus,
-        totalImages: totalTargets,
-        completedImages: 0,
-        currentImage: images[0] || null,
-        estimatedCompletionAt: null,
-    }
-    await saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
-
-    for (const image of images) {
-        vulnerabilityScanRuntime.scanStatus = {
-            ...vulnerabilityScanRuntime.scanStatus,
-            currentImage: image,
-            estimatedCompletionAt: vulnerabilityScanRuntime.scanStatus.startedAt
-                ? getEstimatedCompletionAt(vulnerabilityScanRuntime.scanStatus.startedAt, vulnerabilityScanRuntime.scanStatus.completedImages, totalTargets)
-                : null,
-        }
-        await saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
-
-        const result = await scanImage(image)
-        scanned.push(result)
-        await saveWithRetry(() => saveVulnerabilityImageResult(result), `vulnerability image result for ${image}`)
-
-        vulnerabilityScanRuntime.scanStatus = {
-            ...vulnerabilityScanRuntime.scanStatus,
-            completedImages: scanned.length,
-            currentImage: scanned.length < images.length ? images[scanned.length] : 'npm audit',
-            estimatedCompletionAt: vulnerabilityScanRuntime.scanStatus.startedAt
-                ? getEstimatedCompletionAt(vulnerabilityScanRuntime.scanStatus.startedAt, scanned.length, totalTargets)
-                : null,
-        }
-        await saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
-    }
-
-    const npmProjects = await scanNpmAuditProjects().catch((error) => {
-        console.error('Failed to scan npm projects:', error)
-        return []
-    })
-
-    for (const project of npmProjects) {
-        vulnerabilityScanRuntime.scanStatus = {
-            ...vulnerabilityScanRuntime.scanStatus,
-            currentImage: project.image,
-            estimatedCompletionAt: vulnerabilityScanRuntime.scanStatus.startedAt
-                ? getEstimatedCompletionAt(vulnerabilityScanRuntime.scanStatus.startedAt, vulnerabilityScanRuntime.scanStatus.completedImages, totalTargets)
-                : null,
-        }
-        await saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
-
-        scanned.push(project)
-        await saveWithRetry(() => saveVulnerabilityImageResult(project), `vulnerability npm audit result for ${project.image}`)
-
-        vulnerabilityScanRuntime.scanStatus = {
-            ...vulnerabilityScanRuntime.scanStatus,
-            completedImages: scanned.length,
-            currentImage: scanned.length < totalTargets ? npmProjects[scanned.length - images.length]?.image || null : null,
-            estimatedCompletionAt: vulnerabilityScanRuntime.scanStatus.startedAt
-                ? getEstimatedCompletionAt(vulnerabilityScanRuntime.scanStatus.startedAt, scanned.length, totalTargets)
-                : null,
-        }
-        await saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
-    }
+    await startScanStatus(totalTargets, images[0] || null)
+    await scanDockerImages(images, scanned, totalTargets)
+    await scanNpmProjects(images.length, scanned, totalTargets)
 
     const report: VulnerabilityReportFile = {
         generatedAt: new Date().toISOString(),
@@ -85,6 +26,65 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
     await saveWithRetry(() => saveVulnerabilityReport(report), 'vulnerability report')
 
     return report
+}
+
+async function startScanStatus(totalTargets: number, currentImage: string | null) {
+    vulnerabilityScanRuntime.scanStatus = {
+        ...vulnerabilityScanRuntime.scanStatus,
+        totalImages: totalTargets,
+        completedImages: 0,
+        currentImage,
+        estimatedCompletionAt: null,
+    }
+    await saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
+}
+
+async function scanDockerImages(images: string[], scanned: ImageVulnerabilityReport[], totalTargets: number) {
+    for (const image of images) {
+        await updateScanStatus(image, scanned.length, totalTargets)
+        const result = await scanImage(image)
+        scanned.push(result)
+        await saveWithRetry(() => saveVulnerabilityImageResult(result), `vulnerability image result for ${image}`)
+        await updateScanStatus(scanned.length < images.length ? images[scanned.length] : 'npm audit', scanned.length, totalTargets)
+    }
+}
+
+async function scanNpmProjects(imageCount: number, scanned: ImageVulnerabilityReport[], totalTargets: number) {
+    const npmProjects = await loadNpmProjects()
+    for (const project of npmProjects) {
+        await updateScanStatus(project.image, scanned.length, totalTargets)
+        scanned.push(project)
+        await saveWithRetry(() => saveVulnerabilityImageResult(project), `vulnerability npm audit result for ${project.image}`)
+        const nextProject = npmProjects[scanned.length - imageCount]?.image || null
+        await updateScanStatus(nextProject, scanned.length, totalTargets)
+    }
+}
+
+async function loadNpmProjects() {
+    try {
+        return await scanNpmAuditProjects()
+    } catch (error) {
+        console.error('Failed to scan npm projects:', error)
+        return []
+    }
+}
+
+async function updateScanStatus(currentImage: string | null, completedImages: number, totalTargets: number) {
+    vulnerabilityScanRuntime.scanStatus = {
+        ...vulnerabilityScanRuntime.scanStatus,
+        completedImages,
+        currentImage,
+        estimatedCompletionAt: estimatedCompletion(completedImages, totalTargets),
+    }
+    await saveScanStatusBestEffort(vulnerabilityScanRuntime.scanStatus)
+}
+
+function estimatedCompletion(completedImages: number, totalTargets: number) {
+    if (!vulnerabilityScanRuntime.scanStatus.startedAt) {
+        return null
+    }
+
+    return getEstimatedCompletionAt(vulnerabilityScanRuntime.scanStatus.startedAt, completedImages, totalTargets)
 }
 
 async function saveScanStatusBestEffort(status: DockerScoutScanStatus) {
@@ -113,5 +113,9 @@ async function saveWithRetry<T>(action: () => Promise<T>, label: string): Promis
 }
 
 function wait(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms))
+    const promise = new Promise((resolve) => {
+        setTimeout(resolve, ms)
+    })
+
+    return promise
 }

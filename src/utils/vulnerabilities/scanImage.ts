@@ -20,7 +20,11 @@ export default async function scanImage(image: string): Promise<ImageVulnerabili
 }
 
 function isScannerReport(report: ScannerImageReport | null): report is ScannerImageReport {
-    return Boolean(report)
+    if (!report) {
+        return false
+    }
+
+    return true
 }
 
 function withScannerTimeout(
