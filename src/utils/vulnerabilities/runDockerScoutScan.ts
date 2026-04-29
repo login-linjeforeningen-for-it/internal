@@ -1,7 +1,8 @@
 import getEstimatedCompletionAt from './getEstimatedCompletionAt.ts'
 import getUniqueRunningImages from './getUniqueRunningImages.ts'
 import scanImage from './scanImage.ts'
-import { countNpmAuditProjects, scanNpmAuditProjects } from './scanWithNpmAudit.ts'
+import { getNpmAuditProjects, scanNpmAuditProject } from './scanWithNpmAudit.ts'
+import type { PackageFolder } from './npmAuditTypes.ts'
 import { vulnerabilityScanRuntime } from './runtime.ts'
 import { saveVulnerabilityImageResult, saveVulnerabilityReport, saveVulnerabilityScanStatus } from './storage.ts'
 
@@ -9,13 +10,13 @@ const STORAGE_RETRY_ATTEMPTS = 3
 
 export default async function runDockerScoutScan(): Promise<VulnerabilityReportFile> {
     const images = await getUniqueRunningImages()
-    const npmProjectCount = countNpmAuditProjects()
-    const totalTargets = images.length + npmProjectCount
+    const npmProjects = getNpmAuditProjects()
+    const totalTargets = images.length + npmProjects.length
     const scanned: ImageVulnerabilityReport[] = []
 
     await startScanStatus(totalTargets, images[0] || null)
     await scanDockerImages(images, scanned, totalTargets)
-    await scanNpmProjects(images.length, scanned, totalTargets)
+    await scanNpmProjects(npmProjects, scanned, totalTargets)
 
     const report: VulnerabilityReportFile = {
         generatedAt: new Date().toISOString(),
@@ -49,23 +50,16 @@ async function scanDockerImages(images: string[], scanned: ImageVulnerabilityRep
     }
 }
 
-async function scanNpmProjects(imageCount: number, scanned: ImageVulnerabilityReport[], totalTargets: number) {
-    const npmProjects = await loadNpmProjects()
-    for (const project of npmProjects) {
-        await updateScanStatus(project.image, scanned.length, totalTargets)
-        scanned.push(project)
-        await saveWithRetry(() => saveVulnerabilityImageResult(project), `vulnerability npm audit result for ${project.image}`)
-        const nextProject = npmProjects[scanned.length - imageCount]?.image || null
-        await updateScanStatus(nextProject, scanned.length, totalTargets)
-    }
-}
-
-async function loadNpmProjects() {
-    try {
-        return await scanNpmAuditProjects()
-    } catch (error) {
-        console.error('Failed to scan npm projects:', error)
-        return []
+async function scanNpmProjects(projects: PackageFolder[], scanned: ImageVulnerabilityReport[], totalTargets: number) {
+    for (const [index, project] of projects.entries()) {
+        const currentImage = `npm:${project.relativePath || project.name || project.directory}`
+        await updateScanStatus(currentImage, scanned.length, totalTargets)
+        const report = scanNpmAuditProject(project)
+        scanned.push(report)
+        await saveWithRetry(() => saveVulnerabilityImageResult(report), `vulnerability npm audit result for ${report.image}`)
+        const nextProject = projects[index + 1]
+        const nextImage = nextProject ? `npm:${nextProject.relativePath || nextProject.name || nextProject.directory}` : null
+        await updateScanStatus(nextImage, scanned.length, totalTargets)
     }
 }
 

@@ -1,7 +1,7 @@
 import path from 'path'
 import { auditPackageFolder, npmAuditImageName, skippedNpmAuditReport } from './npmAuditReport.ts'
 import { findPackageFolderForImage, findPackageFolders } from './findNpmPackages.ts'
-import type { ScannerImageReport } from './npmAuditTypes.ts'
+import type { PackageFolder, ScannerImageReport } from './npmAuditTypes.ts'
 
 const PROJECT_ROOT = path.resolve(process.env.SCOUTERBEE_PROJECT_ROOT || process.env.DEPLOY_ROOT || '/workspace')
 
@@ -22,22 +22,20 @@ export default async function scanWithNpmAudit(image: string): Promise<ScannerIm
 
 export async function scanNpmAuditProjects(): Promise<ImageVulnerabilityReport[]> {
     const reports: ImageVulnerabilityReport[] = []
-    for (const project of npmAuditProjects()) {
-        const scannedAt = new Date().toISOString()
-        const scannerReport = scanPackageProject(project, scannedAt)
-        reports.push(projectReport(project, scannerReport))
+    for (const project of getNpmAuditProjects()) {
+        reports.push(scanNpmAuditProject(project))
     }
 
     return reports
 }
 
 export function countNpmAuditProjects() {
-    const projects = npmAuditProjects()
+    const projects = getNpmAuditProjects()
     const count = projects.length
     return count
 }
 
-function npmAuditProjects() {
+export function getNpmAuditProjects() {
     const projects = findPackageFolders(PROJECT_ROOT)
     if (!projects.length) {
         return []
@@ -46,7 +44,13 @@ function npmAuditProjects() {
     return projects
 }
 
-function scanPackageProject(project: ReturnType<typeof npmAuditProjects>[number], scannedAt: string) {
+export function scanNpmAuditProject(project: PackageFolder) {
+    const scannedAt = new Date().toISOString()
+    const scannerReport = scanPackageProject(project, scannedAt)
+    return projectReport(project, scannerReport)
+}
+
+function scanPackageProject(project: PackageFolder, scannedAt: string) {
     try {
         return auditPackageFolder(project, scannedAt)
     } catch (error) {
@@ -54,7 +58,7 @@ function scanPackageProject(project: ReturnType<typeof npmAuditProjects>[number]
     }
 }
 
-function projectReport(project: ReturnType<typeof npmAuditProjects>[number], scannerReport: ScannerImageReport): ImageVulnerabilityReport {
+function projectReport(project: PackageFolder, scannerReport: ScannerImageReport): ImageVulnerabilityReport {
     return {
         image: npmAuditImageName(project),
         scannedAt: scannerReport.scannedAt,
