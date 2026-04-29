@@ -54,15 +54,16 @@ async function scanDockerImages(images: string[], scanned: ImageVulnerabilityRep
 
 async function scanNpmProjects(projects: PackageFolder[], images: string[], scanned: ImageVulnerabilityReport[], totalTargets: number) {
     for (const [index, project] of projects.entries()) {
+        const completedBeforeProject = images.length + index
         const currentImage = `npm:${project.relativePath || project.name || project.directory}`
-        await updateScanStatus(currentImage, scanned.length, totalTargets)
+        await updateScanStatus(currentImage, completedBeforeProject, totalTargets)
         const report = scanNpmAuditProject(project)
         const targetImage = getNpmTargetImage(project, images)
         const merged = mergeScannedReport(scanned, targetImage, report)
         await saveWithRetry(() => saveVulnerabilityImageResult(merged), `vulnerability npm audit result for ${targetImage}`)
         const nextProject = projects[index + 1]
         const nextImage = nextProject ? `npm:${nextProject.relativePath || nextProject.name || nextProject.directory}` : null
-        await updateScanStatus(nextImage, scanned.length, totalTargets)
+        await updateScanStatus(nextImage, completedBeforeProject + 1, totalTargets)
     }
 }
 
