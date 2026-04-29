@@ -1,5 +1,4 @@
 import mergeScannerReports from './mergeScannerReports.ts'
-import scanWithNpmAudit from './scanWithNpmAudit.ts'
 import scanWithScanner from './scanWithScanner.ts'
 
 const SCANNER_TIMEOUT_MS = 240_000
@@ -11,7 +10,6 @@ export default async function scanImage(image: string): Promise<ImageVulnerabili
     const reports = await Promise.all([
         withScannerTimeout(scanWithScanner('docker_scout', image), image, 'docker_scout'),
         withScannerTimeout(scanWithScanner('trivy', image), image, 'trivy'),
-        withScannerTimeout(scanWithNpmAudit(image), image, 'npm_audit'),
     ])
 
     return mergeScannerReports(image, reports.filter(isScannerReport))
