@@ -11,6 +11,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import getContainerCredentials from '#utils/db/overview/getContainerCredentials.ts'
 import shellEscape from '#utils/db/overview/shellEscape.ts'
 
+
 const execAsync = promisify(exec)
 
 export default async function getBackupStats(_: FastifyRequest, res: FastifyReply) {
@@ -54,21 +55,22 @@ export default async function getBackupStats(_: FastifyRequest, res: FastifyRepl
                     info.dbSize === 'Unknown'
                         ? execAsync(
                             `docker exec -e PGPASSWORD=${shellEscape(DB_PASSWORD)} ${shellEscape(id)} psql -U ${shellEscape(DB_USER)} -d ${shellEscape(DB)} -t -c ${shellEscape(`SELECT pg_database_size('${DB}');`)}`
-                        ).then(r => r.stdout.trim()).catch(() => 'Unknown')
+                        ).then((r) => r.stdout.trim()).catch(() => 'Unknown')
                         : Promise.resolve(info.dbSize),
-                    fs.readdir(backupDir).then(async files => {
-                        const s = await Promise.all(
-                            files.map(f => fs.stat(path.join(backupDir, f)
-                        ).catch(() => null)))
-                        return s.reduce(
-                            (a, v) => v ? 
-                            { size: a.size + v.size, time: Math.max(a.time, v.mtimeMs) } :
-                                a, { size: 0, time: 0 }
+                    fs.readdir(backupDir).then(async (files) => {
+                        const stats = await Promise.all(
+                            files
+                                .filter((file) => file.endsWith(config.backup.encryption.extension))
+                                .map((file) => fs.stat(path.join(backupDir, file)).catch(() => null))
                         )
-                    }).catch(
-                        () => (
+
+                        return stats.reduce(
+                            (accumulator, stat) => stat
+                                ? { size: accumulator.size + stat.size, time: Math.max(accumulator.time, stat.mtimeMs) }
+                                : accumulator,
                             { size: 0, time: 0 }
-                        ))
+                        )
+                    }).catch(() => ({ size: 0, time: 0 }))
                 ])
 
                 return {

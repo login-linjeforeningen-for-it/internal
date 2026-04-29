@@ -20,7 +20,8 @@ if (missingVariables.length > 0) {
 }
 
 const env = process.env as Record<string, string | undefined>
-const backupEncryptionKey = process.env.BACKUP_ENCRYPTION_KEY || ''
+const backupAgePublicKey = process.env.BACKUP_AGE_PUBLIC_KEY || ''
+const backupEncryptedExtension = process.env.BACKUP_ENCRYPTED_EXTENSION || '.age'
 
 const config = {
     userinfo: env.AUTHENTIK_USERINFO_URL
@@ -36,8 +37,8 @@ const config = {
         schedule: '0 22 * * *',
         retention: 7,
         encryption: {
-            enabled: backupEncryptionKey.length > 0,
-            key: backupEncryptionKey
+            publicKey: backupAgePublicKey,
+            extension: backupEncryptedExtension
         },
         s3: {
             endpoint: env.S3_ENDPOINT || '',

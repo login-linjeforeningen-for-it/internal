@@ -11,7 +11,6 @@ import config from '#config'
 import getContainerCredentials from '#utils/db/overview/getContainerCredentials.ts'
 import shellEscape from '#utils/db/overview/shellEscape.ts'
 import {
-    decryptBackupFile,
     encryptBackupFile,
     isEncryptedBackupFile
 } from '#utils/backup/encryption.ts'
@@ -27,8 +26,8 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
     const { service, file } = req.body as RestoreBackupProps
     let backupFilePath = ''
     let restoreFilePath = ''
+    let preRestoreBackupFile = ''
     let downloadedRemoteFile = false
-    let removeRestoreFile = false
 
     if (!service || !file) {
         return res.status(400).send({ error: 'Missing service or file' })
@@ -101,8 +100,12 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             }
         }
 
+        if (await isEncryptedBackupFile(backupFilePath)) {
+            return res.status(400).send({ error: 'Backup file is encrypted and cannot be restored here (private key not available)' })
+        }
+
         const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
-        const newBackupFile = path.join(backupDir, `${DB}_${stamp}_pre_restore.dump`)
+        preRestoreBackupFile = path.join(backupDir, `${DB}_${stamp}_pre_restore.dump`)
 
         const preRestoreBackupCommand = [
             'docker exec',
@@ -111,22 +114,18 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
             'pg_dump -Fc -c',
             `-U ${shellEscape(DB_USER)}`,
             shellEscape(DB),
-            `> ${shellEscape(newBackupFile)}`
+            `> ${shellEscape(preRestoreBackupFile)}`
         ].join(' ')
         await execAsync(preRestoreBackupCommand)
 
-        if ((await fs.stat(newBackupFile)).size === 0) {
-            await fs.unlink(newBackupFile).catch(() => { })
+        if ((await fs.stat(preRestoreBackupFile)).size === 0) {
+            await fs.unlink(preRestoreBackupFile).catch(() => { })
             throw new Error('Failed to create pre-restore backup')
         }
 
-        await encryptBackupFile(newBackupFile)
+        await encryptBackupFile(preRestoreBackupFile)
 
-        if (await isEncryptedBackupFile(backupFilePath)) {
-            restoreFilePath = `${backupFilePath}.restore.dump`
-            await decryptBackupFile(backupFilePath, restoreFilePath)
-            removeRestoreFile = true
-        }
+        restoreFilePath = backupFilePath
 
         const command = [
             'docker exec -i',
@@ -146,8 +145,8 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
     } catch (e: any) {
         res.status(500).send({ error: e.message })
     } finally {
-        if (removeRestoreFile && restoreFilePath && restoreFilePath !== backupFilePath) {
-            await fs.unlink(restoreFilePath).catch(() => {})
+        if (preRestoreBackupFile) {
+            await fs.unlink(preRestoreBackupFile).catch(() => {})
         }
         if (downloadedRemoteFile && backupFilePath) {
             await fs.unlink(backupFilePath).catch(() => {})

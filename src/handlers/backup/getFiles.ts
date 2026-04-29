@@ -44,6 +44,10 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
 
             const projectFiles = await fs.readdir(projectDir).catch(() => [])
             for (const file of projectFiles) {
+                if (!file.endsWith(config.backup.encryption.extension)) {
+                    continue
+                }
+
                 if (date && !file.includes(date.replace(/-/g, ''))) {
                     continue
                 }
@@ -74,6 +78,7 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
                         const parts = obj.Key.split('/')
                         if (parts.length !== 2) continue
                         const [project, filename] = parts
+                        if (!filename.endsWith(config.backup.encryption.extension)) continue
                         if (service && !project.toLowerCase().includes(service.toLowerCase())) continue
                         if (date && !filename.includes(date.replace(/-/g, ''))) continue
                         files.push({
