@@ -11,10 +11,13 @@ type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' |
     & VulnerabilityScannerResult
 
 export default async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
-    const reports = await Promise.all([
-        withScannerTimeout(scanWithScanner('docker_scout', image), image, 'docker_scout'),
-        withScannerTimeout(scanWithScanner('trivy', image), image, 'trivy'),
-    ])
+    const reports: Array<ScannerImageReport | null> = []
+    const scanners: VulnerabilityScanner[] = ['docker_scout', 'trivy']
+
+    for (const scanner of scanners) {
+        const report = await withScannerTimeout(scanWithScanner(scanner, image), image, scanner)
+        reports.push(report)
+    }
 
     return mergeScannerReports(image, reports.filter(isScannerReport))
 }
@@ -32,13 +35,18 @@ function withScannerTimeout(
     image: string,
     scanner: VulnerabilityScanner
 ) {
-    return Promise.race([
-        scan,
-        new Promise<null>((resolve) => {
-            setTimeout(() => {
-                console.error(`Timed out ${scanner} scan for ${image}`)
-                resolve(null)
-            }, SCANNER_TIMEOUT_MS[scanner])
-        }),
-    ])
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const timeout = new Promise<null>((resolve) => {
+        timer = setTimeout(() => {
+            console.error(`Timed out ${scanner} scan for ${image}`)
+            resolve(null)
+        }, SCANNER_TIMEOUT_MS[scanner])
+    })
+
+    return Promise.race([scan, timeout]).finally(() => {
+        if (timer) {
+            clearTimeout(timer)
+            timer = null
+        }
+    })
 }
