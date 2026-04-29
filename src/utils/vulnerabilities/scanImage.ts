@@ -2,14 +2,16 @@ import mergeScannerReports from './mergeScannerReports.ts'
 import scanWithNpmAudit from './scanWithNpmAudit.ts'
 import scanWithScanner from './scanWithScanner.ts'
 
+const SCANNER_TIMEOUT_MS = 240_000
+
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
     & VulnerabilityScannerResult
 
 export default async function scanImage(image: string): Promise<ImageVulnerabilityReport> {
     const reports = await Promise.all([
-        scanWithScanner('docker_scout', image),
-        scanWithScanner('trivy', image),
-        scanWithNpmAudit(image),
+        withScannerTimeout(scanWithScanner('docker_scout', image), image, 'docker_scout'),
+        withScannerTimeout(scanWithScanner('trivy', image), image, 'trivy'),
+        withScannerTimeout(scanWithNpmAudit(image), image, 'npm_audit'),
     ])
 
     return mergeScannerReports(image, reports.filter(isScannerReport))
@@ -17,4 +19,20 @@ export default async function scanImage(image: string): Promise<ImageVulnerabili
 
 function isScannerReport(report: ScannerImageReport | null): report is ScannerImageReport {
     return Boolean(report)
+}
+
+function withScannerTimeout(
+    scan: Promise<ScannerImageReport | null>,
+    image: string,
+    scanner: VulnerabilityScanner
+) {
+    return Promise.race([
+        scan,
+        new Promise<null>((resolve) => {
+            setTimeout(() => {
+                console.error(`Timed out ${scanner} scan for ${image}`)
+                resolve(null)
+            }, SCANNER_TIMEOUT_MS)
+        }),
+    ])
 }
