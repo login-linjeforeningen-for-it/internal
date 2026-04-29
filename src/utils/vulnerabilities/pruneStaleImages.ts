@@ -2,7 +2,7 @@ import { getDbClient } from '#db'
 
 export default async function pruneStaleImages(images: ImageVulnerabilityReport[], runningImages: string[]) {
     const allowed = new Set(runningImages)
-    const filtered = images.filter((image) => allowed.has(image.image))
+    const filtered = images.filter((image) => isActiveReportImage(image.image, allowed))
 
     if (filtered.length === images.length) {
         return filtered
@@ -11,7 +11,11 @@ export default async function pruneStaleImages(images: ImageVulnerabilityReport[
     const client = await getDbClient()
     try {
         await client.query('BEGIN')
-        await client.query('DELETE FROM vulnerability_report_images WHERE NOT (image = ANY($1::text[]))', [runningImages])
+        await client.query(`
+            DELETE FROM vulnerability_report_images
+            WHERE NOT (image = ANY($1::text[]))
+              AND image NOT LIKE 'npm:%'
+        `, [runningImages])
         await client.query(
             `UPDATE vulnerability_reports
              SET image_count = $1,
@@ -28,4 +32,12 @@ export default async function pruneStaleImages(images: ImageVulnerabilityReport[
     }
 
     return filtered
+}
+
+function isActiveReportImage(image: string, allowed: Set<string>) {
+    if (image.startsWith('npm:')) {
+        return true
+    }
+
+    return allowed.has(image)
 }
