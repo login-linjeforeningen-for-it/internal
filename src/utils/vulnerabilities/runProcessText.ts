@@ -23,16 +23,36 @@ export default async function runProcessText(cmd: string[], options: RunProcessT
         stderr: 'pipe',
     })
 
-    const timeout = setTimeout(() => {
-        process.kill('SIGKILL')
-    }, options.timeoutMs)
+    let timedOut = false
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    const timeoutPromise = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+            timedOut = true
+            process.kill('SIGKILL')
+            const error = new Error(`Command timed out after ${options.timeoutMs}ms`) as Error & {
+                code?: number
+                killed?: boolean
+            }
+            error.code = 124
+            error.killed = true
+            reject(error)
+        }, options.timeoutMs)
+    })
 
-    const [stdout, stderr, exitCode] = await Promise.all([
+    const resultPromise = Promise.all([
         readStream(process.stdout, options.maxBuffer),
         readStream(process.stderr, options.maxBuffer),
         process.exited,
+    ])
+
+    const [stdout, stderr, exitCode] = await Promise.race([
+        resultPromise,
+        timeoutPromise,
     ]).finally(() => {
-        clearTimeout(timeout)
+        if (timeout) clearTimeout(timeout)
+        if (timedOut) {
+            process.kill('SIGKILL')
+        }
     })
 
     if (exitCode !== 0) {
