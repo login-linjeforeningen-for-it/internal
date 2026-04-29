@@ -10,6 +10,8 @@ const PROJECT_ROOT = path.resolve(process.env.SCOUTERBEE_PROJECT_ROOT || process
 const IGNORED_DIRECTORIES = new Set(['.git', '.next', 'build', 'dist', 'node_modules'])
 const MAX_SEARCH_DEPTH = 4
 const DOCKER_PS_TIMEOUT_MS = 10_000
+const NPM_AUDIT_TIMEOUT_MS = 600_000
+const NPM_LOCK_TIMEOUT_MS = 600_000
 
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
     & VulnerabilityScannerResult
@@ -56,26 +58,77 @@ export default async function scanWithNpmAudit(image: string): Promise<ScannerIm
             return null
         }
 
-        const report = runNpmAudit(project.directory)
-        const severity = severityFromMetadata(report.metadata)
-        const vulnerabilities = sortVulnerabilityDetails(buildVulnerabilityDetails(report, project))
-
-        return {
-            scanner: 'npm_audit',
-            scannedAt,
-            totalVulnerabilities: metadataTotal(report.metadata) ?? vulnerabilities.length,
-            severity,
-            groups: buildGroupBreakdown(vulnerabilities),
-            vulnerabilities,
-            scanError: null,
-            summaryOnly: false,
-            note: `Audited ${project.relativePath || project.name || project.directory}`,
-        }
+        return auditPackageFolder(project, scannedAt)
     } catch (error: any) {
         return buildSummaryOnly(
             scannedAt,
             `npm audit was skipped because it did not return a usable report: ${formatAuditSkipReason(error)}`
         )
+    }
+}
+
+export async function scanNpmAuditProjects(): Promise<ImageVulnerabilityReport[]> {
+    const folders = findNpmAuditProjects()
+    const reports: ImageVulnerabilityReport[] = []
+
+    for (const project of folders) {
+        const scannedAt = new Date().toISOString()
+        let scannerReport: ScannerImageReport
+        try {
+            scannerReport = auditPackageFolder(project, scannedAt)
+        } catch (error: any) {
+            scannerReport = buildSummaryOnly(
+                scannedAt,
+                `npm audit was skipped because it did not return a usable report: ${formatAuditSkipReason(error)}`
+            )
+        }
+
+        reports.push({
+            image: `npm:${project.relativePath || project.name || path.basename(project.directory)}`,
+            scannedAt: scannerReport.scannedAt,
+            totalVulnerabilities: scannerReport.totalVulnerabilities,
+            severity: scannerReport.severity,
+            groups: scannerReport.groups,
+            vulnerabilities: scannerReport.vulnerabilities,
+            scannerResults: [{
+                scanner: scannerReport.scanner,
+                scannedAt: scannerReport.scannedAt,
+                totalVulnerabilities: scannerReport.totalVulnerabilities,
+                severity: scannerReport.severity,
+                scanError: scannerReport.scanError,
+                summaryOnly: scannerReport.summaryOnly,
+                note: scannerReport.note,
+            }],
+            scanError: scannerReport.scanError,
+        })
+    }
+
+    return reports
+}
+
+export function countNpmAuditProjects() {
+    return findNpmAuditProjects().length
+}
+
+function findNpmAuditProjects() {
+    return findPackageFolders(PROJECT_ROOT)
+}
+
+function auditPackageFolder(project: PackageFolder, scannedAt: string): ScannerImageReport {
+    const report = runNpmAudit(project.directory)
+    const severity = severityFromMetadata(report.metadata)
+    const vulnerabilities = sortVulnerabilityDetails(buildVulnerabilityDetails(report, project))
+
+    return {
+        scanner: 'npm_audit',
+        scannedAt,
+        totalVulnerabilities: metadataTotal(report.metadata) ?? vulnerabilities.length,
+        severity,
+        groups: buildGroupBreakdown(vulnerabilities),
+        vulnerabilities,
+        scanError: null,
+        summaryOnly: false,
+        note: `Audited ${project.relativePath || project.name || project.directory}`,
     }
 }
 
@@ -213,7 +266,7 @@ function runNpmAudit(directory: string): NpmAuditReport {
                 NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --max-old-space-size=192`.trim(),
             },
             maxBuffer: 16 * 1024 * 1024,
-            timeout: 60_000,
+            timeout: NPM_AUDIT_TIMEOUT_MS,
             stdio: ['ignore', 'pipe', 'pipe'],
         })
         return parseAuditOutput(output)
@@ -240,7 +293,7 @@ function prepareTemporaryAuditDirectory(directory: string) {
             NODE_OPTIONS: `${process.env.NODE_OPTIONS || ''} --max-old-space-size=192`.trim(),
         },
         maxBuffer: 16 * 1024 * 1024,
-        timeout: 120_000,
+        timeout: NPM_LOCK_TIMEOUT_MS,
         stdio: ['ignore', 'pipe', 'pipe'],
     })
 
