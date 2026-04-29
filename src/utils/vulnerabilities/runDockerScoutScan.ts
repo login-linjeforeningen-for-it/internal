@@ -1,5 +1,7 @@
+import path from 'path'
 import getEstimatedCompletionAt from './getEstimatedCompletionAt.ts'
 import getUniqueRunningImages from './getUniqueRunningImages.ts'
+import mergeImageReports from './mergeImageReports.ts'
 import scanImage from './scanImage.ts'
 import { getNpmAuditProjects, scanNpmAuditProject } from './scanWithNpmAudit.ts'
 import type { PackageFolder } from './npmAuditTypes.ts'
@@ -16,7 +18,7 @@ export default async function runDockerScoutScan(): Promise<VulnerabilityReportF
 
     await startScanStatus(totalTargets, images[0] || null)
     await scanDockerImages(images, scanned, totalTargets)
-    await scanNpmProjects(npmProjects, scanned, totalTargets)
+    await scanNpmProjects(npmProjects, images, scanned, totalTargets)
 
     const report: VulnerabilityReportFile = {
         generatedAt: new Date().toISOString(),
@@ -50,17 +52,41 @@ async function scanDockerImages(images: string[], scanned: ImageVulnerabilityRep
     }
 }
 
-async function scanNpmProjects(projects: PackageFolder[], scanned: ImageVulnerabilityReport[], totalTargets: number) {
+async function scanNpmProjects(projects: PackageFolder[], images: string[], scanned: ImageVulnerabilityReport[], totalTargets: number) {
     for (const [index, project] of projects.entries()) {
         const currentImage = `npm:${project.relativePath || project.name || project.directory}`
         await updateScanStatus(currentImage, scanned.length, totalTargets)
         const report = scanNpmAuditProject(project)
-        scanned.push(report)
-        await saveWithRetry(() => saveVulnerabilityImageResult(report), `vulnerability npm audit result for ${report.image}`)
+        const targetImage = getNpmTargetImage(project, images)
+        const merged = mergeScannedReport(scanned, targetImage, report)
+        await saveWithRetry(() => saveVulnerabilityImageResult(merged), `vulnerability npm audit result for ${targetImage}`)
         const nextProject = projects[index + 1]
         const nextImage = nextProject ? `npm:${nextProject.relativePath || nextProject.name || nextProject.directory}` : null
         await updateScanStatus(nextImage, scanned.length, totalTargets)
     }
+}
+
+function mergeScannedReport(scanned: ImageVulnerabilityReport[], targetImage: string, report: ImageVulnerabilityReport) {
+    const existingIndex = scanned.findIndex((entry) => entry.image === targetImage)
+    const targetReport = { ...report, image: targetImage }
+    if (existingIndex < 0) {
+        scanned.push(targetReport)
+        return targetReport
+    }
+
+    const merged = mergeImageReports(targetImage, [scanned[existingIndex], targetReport])
+    scanned[existingIndex] = merged
+    return merged
+}
+
+function getNpmTargetImage(project: PackageFolder, images: string[]) {
+    const relativePath = project.relativePath || project.name || path.basename(project.directory)
+    const rootName = relativePath.split(/[\\/]/).filter(Boolean)[0] || relativePath
+    const underscoredPath = relativePath.replace(/[\\/]/g, '_')
+    const candidates = [rootName, underscoredPath, project.name, path.basename(project.directory)]
+        .filter((candidate): candidate is string => Boolean(candidate))
+
+    return candidates.find((candidate) => images.includes(candidate)) || rootName
 }
 
 async function updateScanStatus(currentImage: string | null, completedImages: number, totalTargets: number) {
