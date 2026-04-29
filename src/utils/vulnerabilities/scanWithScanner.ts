@@ -181,7 +181,7 @@ async function buildScoutQuickviewFallback(image: string, scannedAt: string, err
             summaryOnly: true,
             note: 'Docker Scout detailed CVE data is unavailable for this image. Showing quickview summary only.',
         }
-    } catch {
+    } catch (fallbackError) {
         return {
             scanner: 'docker_scout',
             scannedAt,
@@ -189,7 +189,7 @@ async function buildScoutQuickviewFallback(image: string, scannedAt: string, err
             severity: emptySeverityCount(),
             groups: [],
             vulnerabilities: [],
-            scanError: null,
+            scanError: formatScanError(fallbackError || error),
             summaryOnly: true,
             note: SCOUT_UNAVAILABLE_NOTE,
         }

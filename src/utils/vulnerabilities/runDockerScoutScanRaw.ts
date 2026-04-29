@@ -1,7 +1,7 @@
 import parseJsonDocument from './parseJsonDocument.ts'
 import runProcessText from './runProcessText.ts'
 
-const DOCKER_SCOUT_TIMEOUT_SECONDS = 45
+const DOCKER_SCOUT_TIMEOUT_SECONDS = 180
 
 export default async function runDockerScoutScanRaw(image: string) {
     try {
