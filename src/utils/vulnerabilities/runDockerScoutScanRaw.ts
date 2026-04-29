@@ -2,6 +2,7 @@ import parseJsonDocument from './parseJsonDocument.ts'
 import runProcessText from './runProcessText.ts'
 
 const DOCKER_SCOUT_TIMEOUT_SECONDS = 900
+const DOCKER_SCOUT_MAX_BUFFER = 128 * 1024 * 1024
 
 export default async function runDockerScoutScanRaw(image: string) {
     try {
@@ -13,7 +14,7 @@ export default async function runDockerScoutScanRaw(image: string) {
             '--format',
             'sarif',
         ], {
-            maxBuffer: 20 * 1024 * 1024,
+            maxBuffer: DOCKER_SCOUT_MAX_BUFFER,
             timeoutMs: DOCKER_SCOUT_TIMEOUT_SECONDS * 1000,
         })
         return parseJsonDocument(String(stdout))

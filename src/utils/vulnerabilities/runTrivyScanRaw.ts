@@ -1,6 +1,7 @@
 import runProcessText from './runProcessText.ts'
 
 const TRIVY_TIMEOUT_SECONDS = 180
+const TRIVY_MAX_BUFFER = 128 * 1024 * 1024
 
 export default async function runTrivyScanRaw(image: string) {
     const { stdout } = await runProcessText([
@@ -20,7 +21,7 @@ export default async function runTrivyScanRaw(image: string) {
         'vuln',
         image,
     ], {
-        maxBuffer: 20 * 1024 * 1024,
+        maxBuffer: TRIVY_MAX_BUFFER,
         timeoutMs: TRIVY_TIMEOUT_SECONDS * 1000,
     })
     return JSON.parse(String(stdout))
