@@ -9,6 +9,7 @@ import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 const PROJECT_ROOT = path.resolve(process.env.SCOUTERBEE_PROJECT_ROOT || process.env.DEPLOY_ROOT || '/workspace')
 const IGNORED_DIRECTORIES = new Set(['.git', '.next', 'build', 'dist', 'node_modules'])
 const MAX_SEARCH_DEPTH = 4
+const DOCKER_PS_TIMEOUT_MS = 10_000
 
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
     & VulnerabilityScannerResult
@@ -130,6 +131,7 @@ function getContainerNamesForImage(image: string) {
         const output = execSync('docker ps --format "{{.Image}}|{{.Names}}"', {
             encoding: 'utf8',
             maxBuffer: 1024 * 1024,
+            timeout: DOCKER_PS_TIMEOUT_MS,
         })
 
         return output
