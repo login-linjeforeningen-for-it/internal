@@ -1,6 +1,6 @@
 import runProcessText from './runProcessText.ts'
 
-const DOCKER_SCOUT_QUICKVIEW_TIMEOUT_SECONDS = 120
+const DOCKER_SCOUT_QUICKVIEW_TIMEOUT_SECONDS = 300
 
 export default async function runDockerScoutQuickviewRaw(image: string) {
     const { stdout, stderr } = await runProcessText([
