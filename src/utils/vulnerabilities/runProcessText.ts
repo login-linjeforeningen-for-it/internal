@@ -1,4 +1,15 @@
-import { spawn } from 'child_process'
+declare const Bun: {
+    spawn: (options: {
+        cmd: string[]
+        stdout: 'pipe'
+        stderr: 'pipe'
+    }) => {
+        stdout: ReadableStream<Uint8Array>
+        stderr: ReadableStream<Uint8Array>
+        exited: Promise<number>
+        kill: (signal?: string) => void
+    }
+}
 
 type RunProcessTextOptions = {
     timeoutMs: number
@@ -6,103 +17,68 @@ type RunProcessTextOptions = {
 }
 
 export default async function runProcessText(cmd: string[], options: RunProcessTextOptions) {
-    const [command, ...args] = cmd
-    if (!command) {
-        throw new Error('Missing command')
+    const child = Bun.spawn({ cmd, stdout: 'pipe', stderr: 'pipe' })
+    let timedOut = false
+    const timeout = setTimeout(() => {
+        timedOut = true
+        child.kill('SIGTERM')
+        setTimeout(() => child.kill('SIGKILL'), 2000).unref()
+    }, options.timeoutMs)
+
+    try {
+        const [stdout, stderr, exitCode] = await Promise.all([
+            readStream(child.stdout, options.maxBuffer),
+            readStream(child.stderr, options.maxBuffer),
+            child.exited,
+        ])
+        return processResult(exitCode, stdout, stderr, timedOut, options.timeoutMs)
+    } finally {
+        clearTimeout(timeout)
     }
-
-    return new Promise<{ stdout: string, stderr: string }>((resolve, reject) => {
-        const maxBuffer = options.maxBuffer || 20 * 1024 * 1024
-        const child = spawn(command, args, {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            windowsHide: true,
-        })
-        const output = createOutputCollector(maxBuffer, (error) => {
-            child.kill('SIGTERM')
-            reject(error)
-        })
-        let timedOut = false
-
-        const timer = setTimeout(() => {
-            timedOut = true
-            child.kill('SIGTERM')
-            setTimeout(() => child.kill('SIGKILL'), 2000).unref()
-        }, options.timeoutMs)
-
-        child.stdout?.on('data', (chunk) => output.appendStdout(chunk))
-        child.stderr?.on('data', (chunk) => output.appendStderr(chunk))
-        child.on('error', (error) => {
-            clearTimeout(timer)
-            reject(error)
-        })
-        child.on('close', (code) => {
-            clearTimeout(timer)
-            if (timedOut) {
-                reject(createProcessError(`Command timed out after ${options.timeoutMs}ms`, output))
-                return
-            }
-            if (code && code !== 0) {
-                reject(createProcessError(`Command failed with exit code ${code}`, output))
-                return
-            }
-            resolve({ stdout: output.stdout(), stderr: output.stderr() })
-        })
-    })
 }
 
-function createOutputCollector(maxBuffer: number, onError: (error: Error) => void) {
-    let stdout = ''
-    let stderr = ''
-    let rejected = false
+async function readStream(stream: ReadableStream<Uint8Array>, maxBuffer = 20 * 1024 * 1024) {
+    const reader = stream.getReader()
+    const chunks: Uint8Array[] = []
+    let size = 0
 
-    const append = (value: string, current: string) => {
-        if (rejected) return current
-        const next = current + value
-        if (next.length > maxBuffer) {
-            rejected = true
-            onError(new Error(`Command output exceeded ${maxBuffer} bytes`))
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        size += value.byteLength
+        if (size > maxBuffer) {
+            await reader.cancel().catch(() => undefined)
+            throw createProcessError(`Command output exceeded ${maxBuffer} bytes`, '', '', null, true)
         }
-        return next
+        chunks.push(value)
     }
 
-    return {
-        appendStdout(chunk: Buffer) {
-            const value = chunk.toString('utf8')
-            const next = append(value, stdout)
-            stdout = next
-
-            return stdout
-        },
-        appendStderr(chunk: Buffer) {
-            const value = chunk.toString('utf8')
-            const next = append(value, stderr)
-            stderr = next
-
-            return stderr
-        },
-        stdout() {
-            const value = stdout
-            if (!value) {
-                return ''
-            }
-
-            return value
-        },
-        stderr() {
-            const value = stderr
-            if (!value) {
-                return ''
-            }
-
-            return value
-        },
-    }
+    return new TextDecoder().decode(Buffer.concat(chunks))
 }
 
-function createProcessError(message: string, output: { stdout: () => string, stderr: () => string }) {
-    const error = new Error(message) as Error & { stdout?: string, stderr?: string }
-    error.stdout = output.stdout()
-    error.stderr = output.stderr()
+function processResult(exitCode: number, stdout: string, stderr: string, timedOut: boolean, timeoutMs: number) {
+    if (timedOut) {
+        throw createProcessError(`Command timed out after ${timeoutMs}ms`, stdout, stderr, exitCode, true)
+    }
 
+    if (exitCode !== 0) {
+        const message = stderr || stdout || `Command failed with exit code ${exitCode}`
+        throw createProcessError(message, stdout, stderr, exitCode, false)
+    }
+
+    return { stdout, stderr }
+}
+
+function createProcessError(message: string, stdout: string, stderr: string, code: number | null, killed: boolean) {
+    const error = new Error(message) as Error & {
+        stdout?: string
+        stderr?: string
+        code?: number | null
+        killed?: boolean
+    }
+    error.stdout = stdout
+    error.stderr = stderr
+    error.code = code
+    error.killed = killed
     return error
 }
