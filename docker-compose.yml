@@ -33,7 +33,7 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-local}
       TZ: Europe/Oslo
     volumes:
-      - ${HOME}/.docker/config.json:/root/.docker/config.json:ro
+      - ${HOME}/.docker:/root/.docker
       - /var/run/docker.sock:/var/run/docker.sock
       - /etc/nginx:/etc/nginx:ro
       - /usr/local/openresty/nginx:/usr/local/openresty/nginx:ro
