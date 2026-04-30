@@ -48,7 +48,8 @@ export async function runBackup() {
             region: config.backup.s3.region,
             accessKeyId: config.backup.s3.accessKey,
             secretAccessKey: config.backup.s3.secretKey,
-            bucket: config.backup.s3.bucket
+            bucket: config.backup.s3.bucket,
+            storageClass: 'STANDARD_IA'
         })
     }
 
