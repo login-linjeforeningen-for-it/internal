@@ -3,7 +3,7 @@ import path from 'path'
 import config from '#config'
 import { formatSize } from '#utils/format.ts'
 import { getBackupDir } from '#utils/backup/utils.ts'
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3'
+import { S3Client } from 'bun'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 type GetBackupFilesProps = {
@@ -23,11 +23,9 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
             s3 = new S3Client({
                 endpoint: config.backup.s3.endpoint,
                 region: config.backup.s3.region,
-                credentials: {
-                    accessKeyId: config.backup.s3.accessKey,
-                    secretAccessKey: config.backup.s3.secretKey
-                },
-                forcePathStyle: true
+                accessKeyId: config.backup.s3.accessKey,
+                secretAccessKey: config.backup.s3.secretKey,
+                bucket: config.backup.s3.bucket
             })
         }
 
@@ -68,14 +66,11 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
 
         if (s3 && config.backup.s3.bucket) {
             try {
-                const command = new ListObjectsV2Command({
-                    Bucket: config.backup.s3.bucket
-                })
-                const response = await s3.send(command)
-                if (response.Contents) {
-                    for (const obj of response.Contents) {
-                        if (!obj.Key || !obj.LastModified || !obj.Size || obj.Size <= 0) continue
-                        const parts = obj.Key.split('/')
+                const response = await s3.list()
+                if (response.contents) {
+                    for (const obj of response.contents) {
+                        if (!obj.key || !obj.lastModified || !obj.size || obj.size <= 0) continue
+                        const parts = obj.key.split('/')
                         if (parts.length !== 2) continue
                         const [project, filename] = parts
                         if (!filename.endsWith(config.backup.encryption.extension)) continue
@@ -84,8 +79,8 @@ export default async function getBackupFiles(req: FastifyRequest, res: FastifyRe
                         files.push({
                             service: project,
                             file: filename,
-                            size: formatSize(obj.Size),
-                            mtime: obj.LastModified.toISOString(),
+                            size: formatSize(obj.size),
+                            mtime: new Date(obj.lastModified).toISOString(),
                             location: 'remote'
                         })
                     }

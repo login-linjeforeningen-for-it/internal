@@ -1,12 +1,11 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs/promises'
-import { createWriteStream } from 'fs'
 import path from 'path'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 import { getBackupDir } from '#utils/backup/utils.ts'
 import getPostgresContainers from '#utils/backup/containers.ts'
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
+import { S3Client } from 'bun'
 import config from '#config'
 import getContainerCredentials from '#utils/db/overview/getContainerCredentials.ts'
 import shellEscape from '#utils/db/overview/shellEscape.ts'
@@ -69,29 +68,14 @@ export default async function restoreBackup(req: FastifyRequest, res: FastifyRep
                 const s3 = new S3Client({
                     endpoint: config.backup.s3.endpoint,
                     region: config.backup.s3.region,
-                    credentials: {
-                        accessKeyId: config.backup.s3.accessKey,
-                        secretAccessKey: config.backup.s3.secretKey
-                    },
-                    forcePathStyle: true
+                    accessKeyId: config.backup.s3.accessKey,
+                    secretAccessKey: config.backup.s3.secretKey,
+                    bucket: config.backup.s3.bucket
                 })
                 try {
-                    const command = new GetObjectCommand({
-                        Bucket: config.backup.s3.bucket,
-                        Key: `${project}/${file}`
-                    })
-                    const response = await s3.send(command)
-                    if (response.Body) {
-                        const writeStream = createWriteStream(backupFilePath)
-                        ;(response.Body as any).pipe(writeStream)
-                        await new Promise((resolve, reject) => {
-                            writeStream.on('finish', resolve)
-                            writeStream.on('error', reject)
-                        })
-                        downloadedRemoteFile = true
-                    } else {
-                        return res.status(404).send({ error: 'Backup file not found locally or remotely' })
-                    }
+                    const s3File = s3.file(`${project}/${file}`)
+                    await Bun.write(backupFilePath, s3File)
+                    downloadedRemoteFile = true
                 } catch (e) {
                     return res.status(404).send({ error: 'Backup file not found locally or remotely' })
                 }
