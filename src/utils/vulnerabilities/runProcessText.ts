@@ -1,16 +1,3 @@
-declare const Bun: {
-    spawn: (options: {
-        cmd: string[]
-        stdout: 'pipe'
-        stderr: 'pipe'
-    }) => {
-        stdout: ReadableStream<Uint8Array>
-        stderr: ReadableStream<Uint8Array>
-        exited: Promise<number>
-        kill: (signal?: string) => void
-    }
-}
-
 type RunProcessTextOptions = {
     timeoutMs: number
     maxBuffer?: number
