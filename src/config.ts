@@ -7,7 +7,8 @@ const requiredEnvironmentVariables = [
     'S3_ACCESS_KEY',
     'S3_SECRET_KEY',
     'S3_BUCKET',
-    'S3_REGION'
+    'S3_REGION',
+    'LOG_ALERTS_WEBHOOK_URL'
 ]
 
 const missingVariables = requiredEnvironmentVariables
@@ -65,7 +66,7 @@ const config = {
         },
         alerts: {
             enabled: (env.LOG_ALERTS_ENABLED || 'true') !== 'false',
-            webhook: env.LOG_ALERTS_WEBHOOK_URL || 'https://discord.com/api/webhooks/1412821204498386984/zwAZbaIo7talBNTXwZWEnvY0jIzRO0Kr97efOORTzDNF_ksZBetA5jJmT_Je6tkJhnyq',
+            webhook: env.LOG_ALERTS_WEBHOOK_URL,
             threadId: env.LOG_ALERTS_THREAD_ID || '1484122179665788990',
             schedule: env.LOG_ALERTS_SCHEDULE || '*/1 * * * *',
         },
