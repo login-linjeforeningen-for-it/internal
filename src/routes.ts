@@ -13,7 +13,6 @@ import postDeploy from './handlers/deploy/postDeploy.ts'
 import putAutoDeploy from './handlers/deploy/putAutoDeploy.ts'
 import getBackupStats from './handlers/backup/get.ts'
 import getBackupFiles from './handlers/backup/getFiles.ts'
-import restoreBackup from './handlers/backup/post.ts'
 import triggerBackup from './handlers/backup/trigger.ts'
 import preHandler from '#utils/auth/authMiddleware.ts'
 import getDatabaseCount from './handlers/backup/getCount.ts'
@@ -44,7 +43,6 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/databases', { preHandler }, getDatabaseCount)
     fastify.get('/db', { preHandler }, getDatabaseOverview)
     fastify.get('/backup/files', { preHandler }, getBackupFiles)
-    fastify.post('/backup/restore', { preHandler }, restoreBackup)
 
     // ingress
     fastify.get('/ingress/:port', { preHandler }, getIngress)

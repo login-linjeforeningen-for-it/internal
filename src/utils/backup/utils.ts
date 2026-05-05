@@ -1,4 +1,3 @@
-import config from '#config'
 import { envParse } from 'utilbee/utils'
 import fs from 'fs/promises'
 import path from 'path'
@@ -12,10 +11,6 @@ export async function getContainerEnv(workingDir: string) {
     } catch {
         return {}
     }
-}
-
-export function getBackupDir(project: string) {
-    return path.join(config.backup.path, project)
 }
 
 export function normalizeEnvValue(value: string | null | undefined) {

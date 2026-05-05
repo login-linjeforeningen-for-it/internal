@@ -2,10 +2,10 @@ import { exec } from 'child_process'
 import { promisify } from 'util'
 import fs from 'fs/promises'
 import path from 'path'
+import os from 'os'
 import { S3Client } from 'bun'
 import config from '#config'
 import getPostgresContainers from '#utils/backup/containers.ts'
-import { getBackupDir } from '#utils/backup/utils.ts'
 import { encryptBackupFile } from '#utils/backup/encryption.ts'
 import getContainerCredentials from '#utils/db/overview/getContainerCredentials.ts'
 import shellEscape from '#utils/db/overview/shellEscape.ts'
@@ -41,23 +41,35 @@ export async function runBackup() {
         throw new Error('No running PostgreSQL containers found')
     }
 
-    let s3: S3Client | null = null
-    if (config.backup.s3 && config.backup.s3.endpoint && config.backup.s3.bucket) {
-        s3 = new S3Client({
-            endpoint: config.backup.s3.endpoint,
-            region: config.backup.s3.region,
-            accessKeyId: config.backup.s3.accessKey,
-            secretAccessKey: config.backup.s3.secretKey,
-            bucket: config.backup.s3.bucket,
+    let s3Local: S3Client | null = null
+    if (config.backup.s3_local && config.backup.s3_local.endpoint && config.backup.s3_local.bucket) {
+        s3Local = new S3Client({
+            endpoint: config.backup.s3_local.endpoint,
+            accessKeyId: config.backup.s3_local.accessKey,
+            secretAccessKey: config.backup.s3_local.secretKey,
+            bucket: config.backup.s3_local.bucket
+        })
+    }
+
+    let s3Remote: S3Client | null = null
+    if (config.backup.s3_remote && config.backup.s3_remote.endpoint && config.backup.s3_remote.bucket) {
+        s3Remote = new S3Client({
+            endpoint: config.backup.s3_remote.endpoint,
+            region: config.backup.s3_remote.region,
+            accessKeyId: config.backup.s3_remote.accessKey,
+            secretAccessKey: config.backup.s3_remote.secretKey,
+            bucket: config.backup.s3_remote.bucket,
             storageClass: 'STANDARD_IA'
         })
     }
 
-    const projects = new Set<string>()
+    if (!s3Local) {
+        throw new Error('Local S3 is not configured for backups')
+    }
 
     await Promise.all(containers.map(async (container) => {
         const { id, name, project, workingDir } = container
-        let file: string | null = null
+        let tempDir = ''
 
         if (!project || !workingDir) {
             result.failures.push({ container: name, error: 'Missing compose labels' })
@@ -67,12 +79,9 @@ export async function runBackup() {
         try {
             const { DB, DB_USER, DB_PASSWORD } = await getContainerCredentials({ id, workingDir })
 
-            projects.add(project)
-            const dir = getBackupDir(project)
-            await fs.mkdir(dir, { recursive: true })
-
             const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
-            file = path.join(dir, `${DB}_${stamp}.dump`)
+            tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tekkom-backup-'))
+            const file = path.join(tempDir, `${DB}_${stamp}.dump`)
             const command = [
                 'docker exec',
                 `-e PGPASSWORD=${shellEscape(DB_PASSWORD)}`,
@@ -85,44 +94,43 @@ export async function runBackup() {
             await execAsync(command)
 
             if ((await fs.stat(file)).size === 0) {
-                await fs.unlink(file).catch(() => { })
                 throw new Error('Empty backup')
             }
             const encryptedFile = await encryptBackupFile(file)
-            result.files.push(encryptedFile)
-            result.backedUp += 1
-            console.log(`\tSaved: ${encryptedFile}`)
+            const key = `${project}/${path.basename(encryptedFile)}`
+            try {
+                await uploadBackupToS3(s3Local, key, encryptedFile)
+                console.log(`\tUploaded to local S3: ${key}`)
+            } catch (e: any) {
+                const error = `Local S3 upload failed: ${e.message || e}`
+                result.failures.push({ container: name, error })
+                console.error(`\t${error}`)
+                return
+            }
 
-            if (s3 && config.backup.s3.bucket) {
-                const key = `${project}/${path.basename(encryptedFile)}`
+            result.files.push(key)
+            result.backedUp += 1
+
+            if (s3Remote && config.backup.s3_remote.bucket) {
                 try {
-                    await uploadBackupToS3(s3, key, encryptedFile)
-                    console.log(`\tUploaded to S3: ${key}`)
+                    await uploadBackupToS3(s3Remote, key, encryptedFile)
+                    console.log(`\tUploaded to remote S3: ${key}`)
                 } catch (e: any) {
-                    const error = `S3 upload failed: ${e.message || e}`
+                    const error = `Remote S3 upload failed: ${e.message || e}`
                     result.failures.push({ container: name, error })
                     console.error(`\t${error}`)
                 }
             }
         } catch (e: any) {
             const error = e.message || String(e)
-            if (file) {
-                await fs.unlink(file).catch(() => { })
-            }
             result.failures.push({ container: name, error })
             console.error(`\tFailed ${name}:`, error)
+        } finally {
+            if (tempDir) {
+                await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { })
+            }
         }
     }))
-
-    const limit = Date.now() - (Number(config.backup.retention) || 7) * 86400000
-    for (const p of projects) {
-        const dir = getBackupDir(p)
-        const files = await fs.readdir(dir).catch(() => [])
-        for (const f of files) {
-            const fp = path.join(dir, f)
-            if ((await fs.stat(fp)).mtimeMs < limit) await fs.unlink(fp).catch(() => { })
-        }
-    }
 
     if (!result.backedUp) {
         const reason = result.failures.map(failure => `${failure.container}: ${failure.error}`).join('; ')

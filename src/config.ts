@@ -41,12 +41,18 @@ const config = {
             publicKey: backupAgePublicKey,
             extension: backupEncryptedExtension
         },
-        s3: {
+        s3_remote: {
             endpoint: env.S3_ENDPOINT || '',
             accessKey: env.S3_ACCESS_KEY || '',
             secretKey: env.S3_SECRET_KEY || '',
             bucket: env.S3_BUCKET || '',
             region: env.S3_REGION || ''
+        },
+        s3_local: {
+            endpoint: env.S3_LOCAL_ENDPOINT || '',
+            accessKey: env.S3_LOCAL_ACCESS_KEY || '',
+            secretKey: env.S3_LOCAL_SECRET_KEY || '',
+            bucket: env.S3_LOCAL_BUCKET || '',
         }
     },
     vulnerability: {
