@@ -1,4 +1,5 @@
 import getPostgresContainers from '#utils/backup/containers.ts'
+import getBackupProjectStats from '#utils/backup/getBackupProjectStats.ts'
 import type { FastifyReply, FastifyRequest } from 'fastify'
 
 /**
@@ -10,8 +11,14 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 export default async function getDatabaseCount(_: FastifyRequest, res: FastifyReply) {
     try {
         const containers = await getPostgresContainers({ all: true })
+        const backupProjects = await getBackupProjectStats()
 
-        res.send({ count: containers.length })
+        const projectNames = new Set([
+            ...containers.map((container) => container.project),
+            ...backupProjects.keys(),
+        ])
+
+        res.send({ count: projectNames.size })
     } catch (error) {
         res.status(500).send({ error: (error as Error).message })
     }
