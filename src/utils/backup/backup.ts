@@ -63,8 +63,8 @@ export async function runBackup() {
         })
     }
 
-    if (!s3Local) {
-        throw new Error('Local S3 is not configured for backups')
+    if (!s3Local && !s3Remote) {
+        throw new Error('No S3 target is configured for backups')
     }
 
     await Promise.all(containers.map(async (container) => {
@@ -98,29 +98,40 @@ export async function runBackup() {
             }
             const encryptedFile = await encryptBackupFile(file)
             const key = `${project}/${path.basename(encryptedFile)}`
-            try {
-                await uploadBackupToS3(s3Local, key, encryptedFile)
-                console.log(`\tUploaded to local S3: ${key}`)
-            } catch (e: any) {
-                const error = `Local S3 upload failed: ${e.message || e}`
-                result.failures.push({ container: name, error })
-                console.error(`\t${error}`)
+            let uploaded = false
+            const uploadErrors: string[] = []
+
+            if (s3Local) {
+                try {
+                    await uploadBackupToS3(s3Local, key, encryptedFile)
+                    uploaded = true
+                    console.log(`\tUploaded to local S3: ${key}`)
+                } catch (e: any) {
+                    const error = `Local S3 upload failed: ${e.message || e}`
+                    uploadErrors.push(error)
+                    console.error(`\t${error}`)
+                }
+            }
+
+            if (s3Remote) {
+                try {
+                    await uploadBackupToS3(s3Remote, key, encryptedFile)
+                    uploaded = true
+                    console.log(`\tUploaded to remote S3: ${key}`)
+                } catch (e: any) {
+                    const error = `Remote S3 upload failed: ${e.message || e}`
+                    uploadErrors.push(error)
+                    console.error(`\t${error}`)
+                }
+            }
+
+            if (!uploaded) {
+                result.failures.push({ container: name, error: uploadErrors.join('; ') || 'Upload failed' })
                 return
             }
 
             result.files.push(key)
             result.backedUp += 1
-
-            if (s3Remote && config.backup.s3_remote.bucket) {
-                try {
-                    await uploadBackupToS3(s3Remote, key, encryptedFile)
-                    console.log(`\tUploaded to remote S3: ${key}`)
-                } catch (e: any) {
-                    const error = `Remote S3 upload failed: ${e.message || e}`
-                    result.failures.push({ container: name, error })
-                    console.error(`\t${error}`)
-                }
-            }
         } catch (e: any) {
             const error = e.message || String(e)
             result.failures.push({ container: name, error })
