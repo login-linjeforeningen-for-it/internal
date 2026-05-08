@@ -1,31 +1,9 @@
 import config from '#config'
-import { S3Client } from 'bun'
+import { createBackupS3Clients, listBackupObjectsFromS3 } from '#utils/backup/s3.ts'
 
 export type BackupProjectStats = {
     size: number
     time: number
-}
-
-type S3Target = {
-    endpoint: string
-    accessKey: string
-    secretKey: string
-    bucket: string
-    region?: string
-}
-
-function createS3Client(target: S3Target, remote = false) {
-    if (!target.endpoint || !target.bucket) {
-        return null
-    }
-
-    return new S3Client({
-        endpoint: target.endpoint,
-        ...(remote ? { region: target.region } : {}),
-        accessKeyId: target.accessKey,
-        secretAccessKey: target.secretKey,
-        bucket: target.bucket,
-    })
 }
 
 function mergeStats(target: Map<string, BackupProjectStats>, source: Map<string, BackupProjectStats>) {
@@ -38,35 +16,26 @@ function mergeStats(target: Map<string, BackupProjectStats>, source: Map<string,
     }
 }
 
-async function collectStatsFromS3(s3: S3Client | null, extension: string) {
+async function collectStatsFromS3(
+    s3: ReturnType<typeof createBackupS3Clients>['localS3'],
+    extension: string
+) {
     const statsByProject = new Map<string, BackupProjectStats>()
 
-    if (!s3) {
-        return statsByProject
-    }
+    const backupObjects = await listBackupObjectsFromS3({
+        s3,
+        extension,
+        onError: (error) => {
+            console.error('Failed to list backup project stats:', error)
+        },
+    })
 
-    try {
-        const response = await s3.list()
-        if (!response.contents) {
-            return statsByProject
-        }
-
-        for (const obj of response.contents) {
-            if (!obj.key || !obj.lastModified || !obj.size || obj.size <= 0) continue
-            const parts = obj.key.split('/')
-            if (parts.length !== 2) continue
-            const [project, filename] = parts
-            if (!filename.endsWith(extension)) continue
-
-            const current = statsByProject.get(project) || { size: 0, time: 0 }
-            const lastModifiedMs = new Date(obj.lastModified).getTime()
-            statsByProject.set(project, {
-                size: current.size + obj.size,
-                time: Math.max(current.time, Number.isFinite(lastModifiedMs) ? lastModifiedMs : 0),
-            })
-        }
-    } catch (error) {
-        console.error('Failed to list backup project stats:', error)
+    for (const object of backupObjects) {
+        const current = statsByProject.get(object.project) || { size: 0, time: 0 }
+        statsByProject.set(object.project, {
+            size: current.size + object.size,
+            time: Math.max(current.time, object.lastModifiedMs),
+        })
     }
 
     return statsByProject
@@ -74,8 +43,7 @@ async function collectStatsFromS3(s3: S3Client | null, extension: string) {
 
 export default async function getBackupProjectStats() {
     const extension = config.backup.encryption.extension
-    const localS3 = createS3Client(config.backup.s3_local)
-    const remoteS3 = createS3Client(config.backup.s3_remote, true)
+    const { localS3, remoteS3 } = createBackupS3Clients()
 
     const [localStats, remoteStats] = await Promise.all([
         collectStatsFromS3(localS3, extension),

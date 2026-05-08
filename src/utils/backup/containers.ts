@@ -13,22 +13,23 @@ type PostgresContainer = {
 }
 
 export default async function getPostgresContainers(options: { all?: boolean, filterId?: string, filterProject?: string } = {}): Promise<PostgresContainer[]> {
-    let cmd = 'docker ps --format \'{{.ID}}|{{.Names}}|{{.Status}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.working_dir"}}\''
-    if (options.all) {
-        cmd += ' -a'
-    }
-    if (options.filterId) {
-        cmd += ` --filter "id=${options.filterId}"`
-    }
-    if (options.filterProject) {
-        cmd += ` --filter "label=com.docker.compose.project=${options.filterProject}"`
-    }
+    const filters: string[] = []
+    if (options.all) filters.push('-a')
+    if (options.filterId) filters.push(`--filter "id=${options.filterId}"`)
+    if (options.filterProject) filters.push(`--filter "label=com.docker.compose.project=${options.filterProject}"`)
     if (!options.filterId && !options.filterProject && !options.all) {
-        cmd += ' --filter "label=com.docker.compose.project"'
+        filters.push('--filter "label=com.docker.compose.project"')
     }
+
+    const cmd = [
+        'docker ps',
+        '--format \'{{.ID}}|{{.Names}}|{{.Status}}|{{.Label "com.docker.compose.project"}}|{{.Label "com.docker.compose.project.working_dir"}}\'',
+        ...filters
+    ].join(' ')
 
     const { stdout } = await execAsync(cmd)
     const lines = stdout.split('\n').filter(l => l.trim() !== '')
+    if (!lines.length) return []
     const ids = lines.map(line => line.split('|')[0])
     const imageCmd = `docker inspect ${ids.join(' ')} --format '{{.Config.Image}}'`
     const { stdout: imageStdout } = await execAsync(imageCmd)
@@ -36,13 +37,24 @@ export default async function getPostgresContainers(options: { all?: boolean, fi
 
     return lines.map((line, i) => {
         const [id, name, status, project, workingDir] = line.split('|')
-        return { 
+        return {
             id: id.substring(0, 12),
             name: name.startsWith('/') ? name.substring(1) : name,
-            image: images[i],
+            image: images[i] || '',
             project: project || '',
             workingDir: workingDir || '',
             status
         }
     }).filter(c => c.image.toLowerCase().includes('postgres'))
+}
+
+type ProjectContainer = {
+    project: string
+}
+
+export function getProjectNames(containers: ProjectContainer[], projectsFromBackups: Iterable<string>) {
+    return new Set([
+        ...containers.map((container) => container.project).filter(Boolean),
+        ...projectsFromBackups,
+    ])
 }

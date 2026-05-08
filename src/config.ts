@@ -8,6 +8,12 @@ const requiredEnvironmentVariables = [
     'S3_SECRET_KEY',
     'S3_BUCKET',
     'S3_REGION',
+    'S3_LOCAL_ENDPOINT',
+    'S3_LOCAL_ACCESS_KEY',
+    'S3_LOCAL_SECRET_KEY',
+    'S3_LOCAL_BUCKET',
+    'BACKUP_ENCRYPTED_EXTENSION',
+    'BACKUP_AGE_PUBLIC_KEY',
     'LOG_ALERTS_WEBHOOK_URL'
 ]
 
@@ -21,8 +27,6 @@ if (missingVariables.length > 0) {
 }
 
 const env = process.env as Record<string, string | undefined>
-const backupAgePublicKey = process.env.BACKUP_AGE_PUBLIC_KEY || ''
-const backupEncryptedExtension = process.env.BACKUP_ENCRYPTED_EXTENSION || '.age'
 
 const config = {
     userinfo: env.AUTHENTIK_USERINFO_URL
@@ -38,8 +42,8 @@ const config = {
         schedule: '0 22 * * *',
         retention: 7,
         encryption: {
-            publicKey: backupAgePublicKey,
-            extension: backupEncryptedExtension
+            publicKey: env.BACKUP_AGE_PUBLIC_KEY,
+            extension: env.BACKUP_ENCRYPTED_EXTENSION || '.age'
         },
         s3_remote: {
             endpoint: env.S3_ENDPOINT || '',
