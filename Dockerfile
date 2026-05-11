@@ -14,17 +14,6 @@ RUN apk add --no-cache \
     procps \
     unzip
 
-RUN ARCH="$(uname -m)" \
-    && case "$ARCH" in \
-        x86_64) OP_ARCH=amd64 ;; \
-        aarch64) OP_ARCH=arm64 ;; \
-        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-    esac \
-    && curl -fsSL "https://cache.agilebits.com/dist/1P/op2/pkg/v2.30.3/op_linux_${OP_ARCH}_v2.30.3.zip" -o /tmp/op.zip \
-    && unzip -p /tmp/op.zip op > /usr/local/bin/op \
-    && chmod +x /usr/local/bin/op \
-    && rm -f /tmp/op.zip
-
 ARG DOCKER_SCOUT_VERSION=latest
 
 RUN ARCH="$(uname -m)" \
