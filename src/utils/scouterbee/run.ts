@@ -1,15 +1,9 @@
-import { runOnePasswordScout } from './onePassword.ts'
 import { runProjectScout } from './projects.ts'
 import { ensureScout, getScout } from './state.ts'
 
 export default async function startScout() {
     await ensureScout()
     const state = getScout()
-
-    if (state.onePassword.enabled) {
-        void runOnePasswordScout()
-        scheduleAligned(runOnePasswordScout, state.onePassword.intervalMinutes)
-    }
 
     if (state.projects.enabled) {
         void runProjectScout(state.projectRoot)

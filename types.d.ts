@@ -217,30 +217,10 @@ type NotifiedVulnerabilities = {
     medium: VulnerabilityIdentifier[]
 }
 
-type Expires = {
-    vault: string
-    title: string
-    time: string
-    seen: number
-}
-
-type ExpiresAlert = {
-    hasExpired: Expires[]
-    expiresNextWeek: Expires[]
-    expiresNextMonth: Expires[]
-}
-
 type ProjectReport = {
     title: string
     description: string
     highestSeverity: 'critical' | 'high' | 'medium'
-}
-
-type SecretReport = {
-    ping: boolean
-    red: boolean
-    finalReport: string
-    secretsToReport: boolean
 }
 
 type JobState<T> = {
@@ -262,12 +242,5 @@ type Scout = {
         notified: NotifiedVulnerabilities
         report: ProjectReport | null
         alertSent: boolean
-    }>
-    onePassword: JobState<{
-        categories: ExpiresAlert
-        report: SecretReport | null
-        alertSent: boolean
-        vaultCount: number
-        itemCount: number
     }>
 }

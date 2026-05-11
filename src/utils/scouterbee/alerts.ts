@@ -34,34 +34,3 @@ export async function sendProjectAlert(finalReport: {
         throw new Error(await response.text())
     }
 }
-
-export async function sendSecretAlert(ping: boolean, red: boolean, finalReport: string) {
-    if (!config.scout.webhookUrl) {
-        return
-    }
-
-    const data: { content?: string, embeds: object[] } = {
-        embeds: [
-            {
-                title: '🐝 Secret Report 🐝',
-                description: finalReport,
-                color: ping || red ? 0xff0000 : 0xfd8738,
-                timestamp: new Date().toISOString()
-            }
-        ]
-    }
-
-    if (ping && config.scout.criticalRole) {
-        data.content = `🐝 <@&${config.scout.criticalRole}> 🐝`
-    }
-
-    const response = await fetch(config.scout.webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    })
-
-    if (!response.ok) {
-        throw new Error(await response.text())
-    }
-}

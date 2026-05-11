@@ -12,13 +12,6 @@ type ScoutRow = {
     projects_last_success_at: string | null
     projects_last_error: string | null
     projects_result: unknown
-    one_password_enabled: boolean
-    one_password_interval_minutes: number
-    one_password_last_started_at: string | null
-    one_password_last_finished_at: string | null
-    one_password_last_success_at: string | null
-    one_password_last_error: string | null
-    one_password_result: unknown
 }
 
 const DEFAULT_PROJECT_ROOT = path.resolve(process.env.SCOUTERBEE_PROJECT_ROOT || process.env.DEPLOY_ROOT || '/workspace')
@@ -33,14 +26,7 @@ const SCOUT_COLUMNS = `
     projects_last_finished_at,
     projects_last_success_at,
     projects_last_error,
-    projects_result,
-    one_password_enabled,
-    one_password_interval_minutes,
-    one_password_last_started_at,
-    one_password_last_finished_at,
-    one_password_last_success_at,
-    one_password_last_error,
-    one_password_result
+    projects_result
 `
 
 let state: Scout = createInitialState()
@@ -98,14 +84,7 @@ async function persistState() {
             projects_last_finished_at = $7,
             projects_last_success_at = $8,
             projects_last_error = $9,
-            projects_result = $10::jsonb,
-            one_password_enabled = $11,
-            one_password_interval_minutes = $12,
-            one_password_last_started_at = $13,
-            one_password_last_finished_at = $14,
-            one_password_last_success_at = $15,
-            one_password_last_error = $16,
-            one_password_result = $17::jsonb
+            projects_result = $10::jsonb
         WHERE id = $1`,
         [SCOUT_STATE_ID, ...values]
     )
@@ -124,13 +103,6 @@ async function ensureScoutTable() {
             projects_last_success_at TEXT,
             projects_last_error TEXT,
             projects_result JSONB,
-            one_password_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-            one_password_interval_minutes INTEGER NOT NULL DEFAULT 30,
-            one_password_last_started_at TEXT,
-            one_password_last_finished_at TEXT,
-            one_password_last_success_at TEXT,
-            one_password_last_error TEXT,
-            one_password_result JSONB,
             CHECK (id = 1)
         )`
     )
@@ -149,17 +121,10 @@ async function ensureScoutRow(initialState: Scout) {
             projects_last_finished_at,
             projects_last_success_at,
             projects_last_error,
-            projects_result,
-            one_password_enabled,
-            one_password_interval_minutes,
-            one_password_last_started_at,
-            one_password_last_finished_at,
-            one_password_last_success_at,
-            one_password_last_error,
-            one_password_result
+            projects_result
         )
         VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16, $17::jsonb
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb
         )
         ON CONFLICT (id) DO NOTHING`,
         [SCOUT_STATE_ID, ...values]
@@ -182,16 +147,6 @@ function normalizeScoutRow(row: ScoutRow | null | undefined): Scout {
             lastSuccessAt: row?.projects_last_success_at ?? initialState.projects.lastSuccessAt,
             lastError: row?.projects_last_error ?? initialState.projects.lastError,
             result: normalizeJsonValue(row?.projects_result) as Scout['projects']['result']
-        },
-        onePassword: {
-            ...initialState.onePassword,
-            enabled: row?.one_password_enabled ?? initialState.onePassword.enabled,
-            intervalMinutes: row?.one_password_interval_minutes ?? initialState.onePassword.intervalMinutes,
-            lastStartedAt: row?.one_password_last_started_at ?? initialState.onePassword.lastStartedAt,
-            lastFinishedAt: row?.one_password_last_finished_at ?? initialState.onePassword.lastFinishedAt,
-            lastSuccessAt: row?.one_password_last_success_at ?? initialState.onePassword.lastSuccessAt,
-            lastError: row?.one_password_last_error ?? initialState.onePassword.lastError,
-            result: normalizeJsonValue(row?.one_password_result) as Scout['onePassword']['result']
         }
     }
 }
@@ -206,14 +161,7 @@ function toScoutRow(value: Scout) {
         value.projects.lastFinishedAt,
         value.projects.lastSuccessAt,
         value.projects.lastError,
-        serializeJson(value.projects.result),
-        value.onePassword.enabled,
-        value.onePassword.intervalMinutes,
-        value.onePassword.lastStartedAt,
-        value.onePassword.lastFinishedAt,
-        value.onePassword.lastSuccessAt,
-        value.onePassword.lastError,
-        serializeJson(value.onePassword.result)
+        serializeJson(value.projects.result)
     ] satisfies (string | number | boolean | null)[]
 }
 
@@ -247,13 +195,6 @@ function scoutRowsEqual(row: ScoutRow, value: Scout) {
         && row.projects_last_success_at === next[6]
         && row.projects_last_error === next[7]
         && serializeJson(normalizeJsonValue(row.projects_result)) === next[8]
-        && row.one_password_enabled === next[9]
-        && row.one_password_interval_minutes === next[10]
-        && row.one_password_last_started_at === next[11]
-        && row.one_password_last_finished_at === next[12]
-        && row.one_password_last_success_at === next[13]
-        && row.one_password_last_error === next[14]
-        && serializeJson(normalizeJsonValue(row.one_password_result)) === next[15]
 }
 
 function broadcast() {
@@ -267,15 +208,6 @@ function createInitialState(): Scout {
         projects: {
             enabled: true,
             intervalMinutes: 1,
-            lastStartedAt: null,
-            lastFinishedAt: null,
-            lastSuccessAt: null,
-            lastError: null,
-            result: null
-        },
-        onePassword: {
-            enabled: true,
-            intervalMinutes: 30,
             lastStartedAt: null,
             lastFinishedAt: null,
             lastSuccessAt: null,
