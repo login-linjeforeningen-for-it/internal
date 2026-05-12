@@ -23,16 +23,6 @@ export default async function getHostLogSources({
     const syslog = existsSync('/var/log/syslog')
         ? readTailFile('/var/log/syslog', tail)
         : readTailFile('/var/log/messages', tail)
-    const nginxErrorLog = readFirstExistingFile([
-        '/var/log/nginx/error.log',
-        '/opt/homebrew/var/log/nginx/error.log',
-        '/usr/local/var/log/nginx/error.log',
-    ], tail)
-    const nginxAccessLog = readFirstExistingFile([
-        '/var/log/nginx/access.log',
-        '/opt/homebrew/var/log/nginx/access.log',
-        '/usr/local/var/log/nginx/access.log',
-    ], tail)
     const fail2banLog = readFirstExistingFile([
         '/var/log/fail2ban.log',
     ], tail)
@@ -118,22 +108,6 @@ export default async function getHostLogSources({
             status: 'systemd',
             raw: kernelJournal,
             sourceType: 'journal',
-        },
-        {
-            id: 'host-nginx-error',
-            name: 'Nginx error log',
-            service: 'nginx',
-            status: 'file',
-            raw: nginxErrorLog,
-            sourceType: 'file',
-        },
-        {
-            id: 'host-nginx-access',
-            name: 'Nginx access log',
-            service: 'nginx',
-            status: 'file',
-            raw: nginxAccessLog,
-            sourceType: 'file',
         },
         {
             id: 'host-fail2ban',

@@ -4,7 +4,6 @@ import getDockerContainers from './handlers/docker/get.ts'
 import restartHandler from './handlers/docker/restart.ts'
 import getServerStats from './handlers/stats/get.ts'
 import restartServiceHandler from './handlers/docker/restartService.ts'
-import getIngress from './handlers/nginx/getIngress.ts'
 import getDockerContainer from './handlers/docker/getContainer.ts'
 import getDockerLogs from './handlers/docker/getLogs.ts'
 import getDeployments from './handlers/deploy/getDeployments.ts'
@@ -43,9 +42,6 @@ export default async function apiRoutes(fastify: FastifyInstance, _: FastifyPlug
     fastify.get('/databases', { preHandler }, getDatabaseCount)
     fastify.get('/db', { preHandler }, getDatabaseOverview)
     fastify.get('/backup/files', { preHandler }, getBackupFiles)
-
-    // ingress
-    fastify.get('/ingress/:port', { preHandler }, getIngress)
 
     // stats
     fastify.get('/stats', { preHandler }, getServerStats)
