@@ -1,21 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify'
-import getDockerScoutScanStatus from '#utils/vulnerabilities/getDockerScoutScanStatus.ts'
-import {
-    loadStoredVulnerabilityReport,
-    loadStoredVulnerabilityScanStatus,
-} from '#utils/vulnerabilities/storage.ts'
+import { getOrLoadScanStatus } from '#utils/vulnerabilities/scan.ts'
+import { loadReport } from '#utils/vulnerabilities/storage.ts'
 
 export default async function getVulnerabilities(_: FastifyRequest, res: FastifyReply) {
     try {
-        const report = await loadStoredVulnerabilityReport()
-        const runtimeStatus = getDockerScoutScanStatus()
-        const storedStatus = runtimeStatus.isRunning
-            ? runtimeStatus
-            : await loadStoredVulnerabilityScanStatus()
-        res.send({
-            ...report,
-            scanStatus: storedStatus
-        })
+        const [report, scanStatus] = await Promise.all([loadReport(), getOrLoadScanStatus()])
+        res.send({ ...report, scanStatus })
     } catch (error) {
         res.status(500).send({ error: (error as Error).message })
     }
