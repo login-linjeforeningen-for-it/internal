@@ -1,5 +1,10 @@
-FROM oven/bun:alpine
+FROM oven/bun:alpine AS base
+WORKDIR /app
 
+COPY package.json bun.lock ./
+RUN bun install --production
+
+FROM oven/bun:alpine
 WORKDIR /app
 
 RUN apk add --no-cache \
@@ -12,8 +17,8 @@ RUN apk add --no-cache \
 
 COPY --from=docker/scout-cli:latest /docker-scout /usr/local/lib/docker/cli-plugins/docker-scout
 
-COPY package.json ./
-RUN bun install --production
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/package.json ./package.json
 
 COPY public ./public
 COPY src ./src
@@ -26,3 +31,4 @@ ENV TZ=Europe/Oslo
 EXPOSE 8001
 
 CMD ["bun", "src/index.ts"]
+
