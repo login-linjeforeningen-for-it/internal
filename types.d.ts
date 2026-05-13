@@ -128,7 +128,7 @@ type SeverityLevel = 'critical' | 'high' | 'medium' | 'low' | 'unknown'
 
 type SeverityCount = Record<SeverityLevel, number>
 
-type VulnerabilityScanner = 'docker_scout' | 'trivy' | 'npm_audit'
+type VulnerabilityScanner = 'docker_scout'
 
 interface VulnerabilityGroup {
     source: string

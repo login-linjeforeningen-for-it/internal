@@ -23,8 +23,8 @@ const EMPTY_STATUS: DockerScoutScanStatus = {
     estimatedCompletionAt: null,
 }
 
-const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
-const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image. Showing Trivy results until Scout details are ready.'
+const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image.'
+const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image.'
 
 type ReportRow = {
     generated_at: Date | string | null

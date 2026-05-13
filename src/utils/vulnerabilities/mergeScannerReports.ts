@@ -1,6 +1,5 @@
 import buildGroupBreakdown from './buildGroupBreakdown.ts'
 import emptySeverityCount from './emptySeverityCount.ts'
-import getScannerOrder from './getScannerOrder.ts'
 import getVulnerabilityMergeKey from './getVulnerabilityMergeKey.ts'
 import mergeVulnerabilityDetail from './mergeVulnerabilityDetail.ts'
 import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
@@ -38,7 +37,6 @@ export default function mergeScannerReports(image: string, reports: ScannerImage
             summaryOnly,
             note,
         }))
-        .sort((left, right) => getScannerOrder(left.scanner) - getScannerOrder(right.scanner))
 
     const scanErrors = scannerResults
         .filter((result) => result.scanError)
@@ -70,14 +68,6 @@ export default function mergeScannerReports(image: string, reports: ScannerImage
     }
 }
 
-function formatScannerName(scanner: VulnerabilityScanner) {
-    if (scanner === 'docker_scout') {
-        return 'docker scout'
-    }
-
-    if (scanner === 'npm_audit') {
-        return 'npm audit'
-    }
-
-    return 'trivy'
+function formatScannerName(_scanner: VulnerabilityScanner) {
+    return 'docker scout'
 }

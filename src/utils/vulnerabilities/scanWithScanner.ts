@@ -18,13 +18,12 @@ import parseDockerScoutQuickview from './parseDockerScoutQuickview.ts'
 import isDockerScoutLimitedError from './isDockerScoutLimitedError.ts'
 import isDockerScoutIndexingNotice from './isDockerScoutIndexingNotice.ts'
 import isDockerScoutUpdateNotice from './isDockerScoutUpdateNotice.ts'
-import runTrivyScanRaw from './runTrivyScanRaw.ts'
 import sortVulnerabilityDetails from './sortVulnerabilityDetails.ts'
 
-const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image. Showing Trivy results when available.'
-const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image. Showing Trivy results until Scout details are ready.'
-const SCOUT_TIMEOUT_NOTE = 'Docker Scout timed out for this image. Showing Trivy results until Scout details are ready.'
-const SCOUT_DEFERRED_NOTE = 'Docker Scout detailed scans are deferred on this host. Showing Trivy results for the full image scan.'
+const SCOUT_UNAVAILABLE_NOTE = 'Docker Scout is unavailable for this image.'
+const SCOUT_INDEXING_NOTE = 'Docker Scout is still indexing this image.'
+const SCOUT_TIMEOUT_NOTE = 'Docker Scout timed out for this image.'
+const SCOUT_DEFERRED_NOTE = 'Docker Scout detailed scans are deferred on this host.'
 const DOCKER_SCOUT_DETAILED_SCAN_ENABLED = process.env.DOCKER_SCOUT_DETAILED_SCAN !== 'false'
 
 type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' | 'totalVulnerabilities' | 'scannerResults' | 'scanError'>
@@ -33,87 +32,22 @@ type ScannerImageReport = Omit<ImageVulnerabilityReport, 'image' | 'scannedAt' |
 export default async function scanWithScanner(scanner: VulnerabilityScanner, image: string): Promise<ScannerImageReport> {
     const scannedAt = new Date().toISOString()
 
-    if (scanner === 'docker_scout') {
-        if (!DOCKER_SCOUT_DETAILED_SCAN_ENABLED) {
-            return {
-                scanner,
-                scannedAt,
-                totalVulnerabilities: 0,
-                severity: emptySeverityCount(),
-                groups: [],
-                vulnerabilities: [],
-                scanError: null,
-                summaryOnly: true,
-                note: SCOUT_DEFERRED_NOTE,
-            }
-        }
-
-        try {
-            const parsed = await runDockerScoutScanRaw(image)
-            const vulnerabilities = collectVulnerabilities(parsed)
-            const severity = emptySeverityCount()
-            const details: VulnerabilityDetail[] = []
-
-            for (const vulnerability of vulnerabilities) {
-                const normalizedSeverity = extractSeverity(vulnerability)
-                severity[normalizedSeverity] += 1
-
-                details.push({
-                    id: extractVulnerabilityId(vulnerability),
-                    title: extractTitle(vulnerability),
-                    severity: normalizedSeverity,
-                    source: extractSource(vulnerability),
-                    packageName: extractPackageName(vulnerability),
-                    packageType: extractPackageType(vulnerability),
-                    installedVersion: extractInstalledVersion(vulnerability),
-                    fixedVersion: extractFixedVersion(vulnerability),
-                    description: extractDescription(vulnerability),
-                    references: extractReferences(vulnerability),
-                    scanners: [scanner],
-                })
-            }
-
-            const sortedDetails = sortVulnerabilityDetails(details)
-
-            return {
-                scanner,
-                scannedAt,
-                totalVulnerabilities: sortedDetails.length,
-                severity,
-                groups: buildGroupBreakdown(sortedDetails),
-                vulnerabilities: sortedDetails,
-                scanError: null,
-                summaryOnly: false,
-                note: null,
-            }
-        } catch (error: any) {
-            if (isDockerScoutIndexingNotice(error) || isDockerScoutLimitedError(error) || isDockerScoutUpdateNotice(error) || isScannerTimeout(error)) {
-                const fallback = await buildScoutQuickviewFallback(image, scannedAt, error)
-                if (isDockerScoutIndexingNotice(error)) {
-                    return { ...fallback, note: SCOUT_INDEXING_NOTE }
-                }
-                if (isScannerTimeout(error)) {
-                    return { ...fallback, note: SCOUT_TIMEOUT_NOTE }
-                }
-                return fallback
-            }
-
-            return {
-                scanner,
-                scannedAt,
-                totalVulnerabilities: 0,
-                severity: emptySeverityCount(),
-                groups: [],
-                vulnerabilities: [],
-                scanError: formatScanError(error),
-                summaryOnly: false,
-                note: null,
-            }
+    if (!DOCKER_SCOUT_DETAILED_SCAN_ENABLED) {
+        return {
+            scanner,
+            scannedAt,
+            totalVulnerabilities: 0,
+            severity: emptySeverityCount(),
+            groups: [],
+            vulnerabilities: [],
+            scanError: null,
+            summaryOnly: true,
+            note: SCOUT_DEFERRED_NOTE,
         }
     }
 
     try {
-        const parsed = await runTrivyScanRaw(image)
+        const parsed = await runDockerScoutScanRaw(image)
         const vulnerabilities = collectVulnerabilities(parsed)
         const severity = emptySeverityCount()
         const details: VulnerabilityDetail[] = []
@@ -151,6 +85,17 @@ export default async function scanWithScanner(scanner: VulnerabilityScanner, ima
             note: null,
         }
     } catch (error: any) {
+        if (isDockerScoutIndexingNotice(error) || isDockerScoutLimitedError(error) || isDockerScoutUpdateNotice(error) || isScannerTimeout(error)) {
+            const fallback = await buildScoutQuickviewFallback(image, scannedAt, error)
+            if (isDockerScoutIndexingNotice(error)) {
+                return { ...fallback, note: SCOUT_INDEXING_NOTE }
+            }
+            if (isScannerTimeout(error)) {
+                return { ...fallback, note: SCOUT_TIMEOUT_NOTE }
+            }
+            return fallback
+        }
+
         return {
             scanner,
             scannedAt,
