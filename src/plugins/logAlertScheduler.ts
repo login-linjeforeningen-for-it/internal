@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify'
-import cron from 'node-cron'
 import config from '#config'
 import pruneSeenFingerprints, { seenFingerprints } from './pruneSeenFingerprints.ts'
 import { collectDockerLogsOverview } from '#utils/containers/logs/collectDockerLogsOverview.ts'
@@ -14,7 +13,7 @@ export default async function logAlertScheduler(fastify: FastifyInstance) {
         return
     }
 
-    if (!cron.validate(config.logs.alerts.schedule)) {
+    try { Bun.cron.parse(config.logs.alerts.schedule) } catch {
         fastify.log.error(`Invalid log alert schedule: ${config.logs.alerts.schedule}. Log alerts not started.`)
         return
     }
@@ -23,7 +22,7 @@ export default async function logAlertScheduler(fastify: FastifyInstance) {
 
     let primed = false
 
-    cron.schedule(config.logs.alerts.schedule, async () => {
+    Bun.cron(config.logs.alerts.schedule, async () => {
         try {
             pruneSeenFingerprints()
             const overview = await collectDockerLogsOverview({ level: 'error', tail: 200 })
