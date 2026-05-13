@@ -3,7 +3,10 @@ import cron from 'node-cron'
 import config from '#config'
 import pruneSeenFingerprints, { seenFingerprints } from './pruneSeenFingerprints.ts'
 import { collectDockerLogsOverview } from '#utils/containers/logs/collectDockerLogsOverview.ts'
-import sendDiscordLogAlert from '#utils/alerts/discord.ts'
+import { discordAlert } from 'utilbee/utils'
+import { buildLogsDeepLink } from '#utils/containers/logs/buildLogsDeepLink.ts'
+import escapeCodeBlock from '#utils/containers/logs/escapeCodeBlock.ts'
+import truncate from '#utils/containers/logs/truncate.ts'
 
 export default async function logAlertScheduler(fastify: FastifyInstance) {
     if (!config.logs.alerts.enabled || !config.logs.alerts.webhook) {
@@ -41,11 +44,26 @@ export default async function logAlertScheduler(fastify: FastifyInstance) {
                     continue
                 }
 
-                await sendDiscordLogAlert({
-                    checkedAt: overview.checkedAt,
-                    entry: item.entry,
-                    server: overview.server,
-                    source: item.source,
+                const logDetails = truncate(item.entry.raw || item.entry.message)
+                const deepLink = buildLogsDeepLink(item.source.id, item.entry.fingerprint)
+
+                await discordAlert({
+                    webhookURL: config.logs.alerts.webhook!,
+                    threadId: config.logs.alerts.threadId,
+                    title: `${item.source.name} reported an error`,
+                    url: deepLink,
+                    color: config.login.color,
+                    description: `\`\`\`log\n${escapeCodeBlock(logDetails)}\n\`\`\``,
+                    fields: [
+                        { name: 'Server', value: overview.server, inline: true },
+                        { name: 'Service', value: item.source.service, inline: true },
+                        { name: 'Source', value: item.source.name, inline: true },
+                        { name: 'Status', value: item.source.status, inline: true },
+                        { name: 'Level', value: item.entry.level, inline: true },
+                        { name: 'Link', value: deepLink, inline: false },
+                    ],
+                    footer: `Fingerprint ${item.entry.fingerprint}`,
+                    timestamp: item.entry.timestamp || overview.checkedAt,
                 })
                 seenFingerprints.set(item.entry.fingerprint, Date.now())
             }
