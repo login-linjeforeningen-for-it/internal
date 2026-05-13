@@ -3,40 +3,14 @@ FROM oven/bun:alpine
 WORKDIR /app
 
 RUN apk add --no-cache \
-    curl \
     docker-cli \
     docker-cli-compose \
     git \
     age \
     lm-sensors \
-    npm \
-    openssh-client \
-    procps \
-    unzip
+    procps
 
-ARG DOCKER_SCOUT_VERSION=latest
-
-RUN ARCH="$(uname -m)" \
-    && case "$ARCH" in \
-        x86_64) SCOUT_ARCH=amd64 ;; \
-        aarch64) SCOUT_ARCH=arm64 ;; \
-        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
-    esac \
-    && if [ "$DOCKER_SCOUT_VERSION" = "latest" ]; then \
-        SCOUT_VERSION="$(curl -fsSL https://api.github.com/repos/docker/scout-cli/releases/latest \
-            | sed -n 's/.*"tag_name": "v\([^"]*\)".*/\1/p' \
-            | head -n 1)"; \
-    else \
-        SCOUT_VERSION="$DOCKER_SCOUT_VERSION"; \
-    fi \
-    && test -n "$SCOUT_VERSION" \
-    && mkdir -p /root/.docker/cli-plugins \
-    && curl -fsSL "https://github.com/docker/scout-cli/releases/download/v${SCOUT_VERSION}/docker-scout_${SCOUT_VERSION}_linux_${SCOUT_ARCH}.tar.gz" -o /tmp/docker-scout.tar.gz \
-    && tar -xzf /tmp/docker-scout.tar.gz -C /tmp \
-    && mv /tmp/docker-scout /root/.docker/cli-plugins/docker-scout \
-    && chmod +x /root/.docker/cli-plugins/docker-scout \
-    && /root/.docker/cli-plugins/docker-scout version \
-    && rm -f /tmp/docker-scout.tar.gz
+COPY --from=docker/scout-cli:latest /docker-scout /usr/local/lib/docker/cli-plugins/docker-scout
 
 COPY package.json ./
 RUN bun install --production
