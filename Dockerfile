@@ -1,7 +1,7 @@
 FROM oven/bun:alpine AS base
 WORKDIR /app
 
-COPY package.json bun.lock ./
+COPY package.json bun.lock bunfig.toml ./
 RUN bun install --production
 
 FROM oven/bun:alpine
