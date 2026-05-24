@@ -24,7 +24,12 @@ export async function sendProjectAlert(finalReport: {
         data.content = `🐝 <@&${config.scout.role}> 🐝`
     }
 
-    const response = await fetch(config.scout.webhookUrl, {
+    const url = new URL(config.scout.webhookUrl)
+    if (config.scout.threadId) {
+        url.searchParams.set('thread_id', config.scout.threadId)
+    }
+
+    const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)

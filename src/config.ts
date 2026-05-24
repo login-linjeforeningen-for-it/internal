@@ -64,6 +64,7 @@ const config = {
     },
     scout: {
         webhookUrl: env.WEBHOOK_URL || '',
+        threadId: env.SCOUT_THREAD_ID || '1478363872569200835',
         role: env.CRITICAL_ROLE || '',
     },
     queenbee: {
