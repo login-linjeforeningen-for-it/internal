@@ -20,8 +20,8 @@ export async function sendProjectAlert(finalReport: {
         ]
     }
 
-    if (finalReport.highestSeverity === 'critical' && config.scout.criticalDevelopmentRole) {
-        data.content = `🐝 <@&${config.scout.criticalDevelopmentRole}> 🐝`
+    if (finalReport.highestSeverity === 'critical' && config.scout.role) {
+        data.content = `🐝 <@&${config.scout.role}> 🐝`
     }
 
     const response = await fetch(config.scout.webhookUrl, {
