@@ -76,7 +76,7 @@ async function runScan() {
 }
 
 function persist() {
-    void saveScanStatus({ ...status }).catch(() => undefined)
+    saveScanStatus({ ...status }).catch(() => undefined)
 }
 
 async function getRunningImages(): Promise<string[]> {
