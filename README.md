@@ -52,9 +52,11 @@ All variables go in the root `.env` file. Database credentials are shared with B
 |----------------------------|----------------------------------|----------------------------------------------------------|
 | `PORT`                     | `8001`                           | API port                                                 |
 | `DB`                       | `internal`                       | Postgres database name                                   |
+| `DB_HOST`                  | `postgres`                       | Postgres host                                            |
+| `DB_PORT`                  | `5432`                           | Postgres port                                            |
 | `DB_USER`                  | `internal`                       | Postgres username                                        |
 | `DB_PASSWORD`              |                                  | Postgres password                                        |
-| `API_TOKEN`                |                                  | Token for protected endpoints (optional)                 |
+| `API_TOKEN`                |                                  | Bearer token for protected endpoints; set to restrict access |
 | `AUTHENTIK_URL`            | `https://authentik.login.no`     | Base URL for Authentik, used to build the userinfo URL   |
 | `AUTHENTIK_USERINFO_URL`   |                                  | Override for the Authentik userinfo endpoint             |
 | `S3_ENDPOINT`              |                                  | Remote S3 endpoint for backup uploads                    |
@@ -72,7 +74,7 @@ All variables go in the root `.env` file. Database credentials are shared with B
 | `LOG_ALERTS_ENABLED`       | `false`                          | Set to `true` to enable Discord log alerts               |
 | `LOG_ALERTS_WEBHOOK_URL`   |                                  | Discord webhook URL for log alerts                       |
 | `LOG_ALERTS_THREAD_ID`     |                                  | Discord thread ID for log alerts (optional)              |
-| `LOG_ALERTS_SCHEDULE`      | `*/1 * * * *`                    | Cron schedule for log alert checks                       |
+| `LOG_ALERTS_SCHEDULE`      | `* * * * *`                      | Cron schedule for log alert checks                       |
 | `WEBHOOK_URL`              |                                  | Discord webhook URL for vulnerability scout alerts       |
 | `CRITICAL_ROLE`            |                                  | Discord role ID to ping on critical findings (optional)  |
 | `QUEENBEE_URL`             | `https://queenbee.login.no`      | QueenBee URL used for internal links                     |
@@ -82,7 +84,8 @@ All variables go in the root `.env` file. Database credentials are shared with B
 ## Project Structure
 
 - `src/handlers/` - HTTP handlers (backup, db, deploy, docker, stats, vulnerabilities)
+- `src/plugins/` - Background schedulers (backups, log alerts, vulnerability scans, Docker monitoring)
+- `src/utils/` - Helper utilities
 - `src/routes.ts` - Route registration
 - `src/config.ts` - Configuration and environment variable loading
 - `src/db.ts` - Database client
-- `src/utils/` - Helper utilities
