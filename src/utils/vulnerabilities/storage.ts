@@ -144,6 +144,28 @@ export async function saveScanStatus(status: DockerScoutScanStatus) {
     ])
 }
 
+export async function loadScoutAlertState(): Promise<{ lastAlertedAt: string | null, npmVulnIds: Set<string> }> {
+    await ensureInternalSchema()
+    const { rows: [row] } = await query<{ last_alerted_at: string | null, last_alerted_npm_vuln_ids: string[] }>(
+        'SELECT last_alerted_at, last_alerted_npm_vuln_ids FROM vulnerability_reports WHERE id = 1'
+    )
+    return {
+        lastAlertedAt: toIso(row?.last_alerted_at),
+        npmVulnIds: new Set(row?.last_alerted_npm_vuln_ids ?? []),
+    }
+}
+
+export async function saveScoutAlertState(npmVulnIds: Set<string>): Promise<void> {
+    await ensureInternalSchema()
+    await query(`
+        INSERT INTO vulnerability_reports (id, last_alerted_at, last_alerted_npm_vuln_ids)
+        VALUES (1, now(), $1::jsonb)
+        ON CONFLICT (id) DO UPDATE SET
+            last_alerted_at = now(),
+            last_alerted_npm_vuln_ids = EXCLUDED.last_alerted_npm_vuln_ids
+    `, [JSON.stringify([...npmVulnIds])])
+}
+
 function toIso(value: Date | string | null | undefined): string | null {
     if (!value) return null
     const d = value instanceof Date ? value : new Date(value)

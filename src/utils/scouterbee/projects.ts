@@ -1,7 +1,7 @@
 import { exec } from 'child_process'
 import { promisify } from 'util'
 import { sendProjectAlert } from './alerts.ts'
-import { loadReport } from '../vulnerabilities/storage.ts'
+import { loadReport, loadScoutAlertState, saveScoutAlertState } from '../vulnerabilities/storage.ts'
 
 const execAsync = promisify(exec)
 
@@ -32,10 +32,31 @@ export async function runProjectScout() {
         const localImages = await getLocallyBuiltImages(report.images.map(i => i.image))
         const findings = buildFindings(report, localImages)
         const alert = buildAlert(findings)
-        if (alert) await sendProjectAlert(alert)
+        if (!alert) return
+
+        const isTuesday = new Date().getDay() === 2
+        const { npmVulnIds: prevIds } = await loadScoutAlertState()
+        const currentIds = getNpmVulnIds(report, localImages)
+        const hasNewVulns = [...currentIds].some(id => !prevIds.has(id))
+
+        if (!isTuesday && !hasNewVulns) return
+
+        await sendProjectAlert(alert)
+        await saveScoutAlertState(currentIds)
     } catch (error) {
         console.error('Scout error:', error)
     }
+}
+
+function getNpmVulnIds(report: VulnerabilityReportFile, localImages: Set<string>): Set<string> {
+    const ids = new Set<string>()
+    for (const image of report.images) {
+        if (!localImages.has(image.image)) continue
+        for (const v of image.vulnerabilities) {
+            if (v.packageType === 'npm') ids.add(`${image.image}:${v.id}`)
+        }
+    }
+    return ids
 }
 
 function buildFindings(report: VulnerabilityReportFile, localImages: Set<string>): Finding[] {

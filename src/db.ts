@@ -67,5 +67,11 @@ async function createInternalSchema() {
 
         ALTER TABLE vulnerability_report_images
         ADD COLUMN IF NOT EXISTS scanner_results jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+        ALTER TABLE vulnerability_reports
+        ADD COLUMN IF NOT EXISTS last_alerted_at timestamptz;
+
+        ALTER TABLE vulnerability_reports
+        ADD COLUMN IF NOT EXISTS last_alerted_npm_vuln_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
     `)
 }
