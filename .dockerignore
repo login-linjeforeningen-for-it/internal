@@ -4,4 +4,6 @@ Dockerfile
 node_modules
 data
 npm-debug.log
-bun.lockb
+.env
+.env.*
+*.md

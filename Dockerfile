@@ -8,12 +8,12 @@ FROM oven/bun:alpine
 WORKDIR /app
 
 RUN apk add --no-cache \
-    docker-cli \
-    docker-cli-compose \
-    git \
-    age \
-    lm-sensors \
-    procps
+    docker-cli=28.3.3-r5 \
+    docker-cli-compose=2.36.2-r5 \
+    git=2.49.1-r0 \
+    age=1.2.1-r10 \
+    lm-sensors=3.6.0-r5 \
+    procps-ng=4.0.4-r3
 
 COPY --from=docker/scout-cli:latest /docker-scout /usr/local/lib/docker/cli-plugins/docker-scout
 
