@@ -33,6 +33,8 @@ services:
             S3_REGION: ${S3_REGION:-local}
             S3_SECRET_KEY: ${S3_SECRET_KEY:-local}
             TZ: Europe/Oslo
+        group_add:
+            - "${DOCKER_GID}"
         volumes:
             - ${HOME}/.docker:/home/app/.docker
             - /var/run/docker.sock:/var/run/docker.sock
