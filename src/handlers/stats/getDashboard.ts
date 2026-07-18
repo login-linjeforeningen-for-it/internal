@@ -7,7 +7,7 @@ const execAsync = promisify(exec)
 
 export default async function getDashboardStats(_: FastifyRequest, res: FastifyReply) {
     try {
-        const { stdout } = await execAsync(`docker ps -a --format "{{.ID}}"`)
+        const { stdout } = await execAsync('docker ps -a --format "{{.ID}}"')
         const containers = stdout.split('\n').filter(Boolean).length
 
         // CPU Load (1,5,15 min averages)
@@ -30,14 +30,14 @@ export default async function getDashboardStats(_: FastifyRequest, res: FastifyR
                 const parts = lines[1].split(/\s+/)
                 disk = `${parts[2]} used of ${parts[1]} (${parts[4]})`
             }
-        } catch { }
+        } catch { /* ignore */ }
 
         // Processes
         const { stdout: psOut } = await execAsync('ps -e --no-headers | wc -l')
         const processes = parseInt(psOut.trim(), 10)
 
         res.send({ containers, load, ram, disk, processes })
-    } catch (error) {
+    } catch {
         return {
             ram: 'No RAM',
             processes: 0,

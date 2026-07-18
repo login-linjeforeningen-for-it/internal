@@ -17,7 +17,7 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
 
     try {
         const { stdout } = await execAsync(
-            `docker ps -a --format '{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}|{{.Label "com.docker.compose.project"}}'`,
+            'docker ps -a --format \'{{.ID}}|{{.Names}}|{{.Status}}|{{.RunningFor}}|{{.Label "com.docker.compose.project"}}\'',
             config.docker.options
         )
 
@@ -37,7 +37,7 @@ export default async function getDockerContainer(req: FastifyRequest, res: Fasti
 
         const container = containers.find(c => c.id.startsWith(safeId))
         if (!container) {
-            return res.status(404).send({ error: "Container not found" })
+            return res.status(404).send({ error: 'Container not found' })
         }
 
         const service = container.name.includes('_') ? container.name.split('_')[0] : container.name

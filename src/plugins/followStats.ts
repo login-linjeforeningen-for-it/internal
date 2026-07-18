@@ -8,8 +8,6 @@ import fs from 'fs/promises'
 const SEND_INTERVAL = 2000
 
 export default function followServerStats(connection: WebSocket) {
-    let interval: NodeJS.Timeout
-
     async function sendStats() {
         try {
             // CPU load
@@ -28,7 +26,7 @@ export default function followServerStats(connection: WebSocket) {
                 const totalSwap = parseInt(swapData.match(/SwapTotal:\s+(\d+)/)?.[1] || '0', 10)
                 const freeSwap = parseInt(swapData.match(/SwapFree:\s+(\d+)/)?.[1] || '0', 10)
                 swapPercent = totalSwap > 0 ? (((totalSwap - freeSwap) / totalSwap) * 100).toFixed(2) : '0'
-            } catch {}
+            } catch { /* ignore */ }
 
             // Disk usage
             let diskUsage = 'N/A'
@@ -39,21 +37,21 @@ export default function followServerStats(connection: WebSocket) {
                     const parts = lines[1].split(/\s+/)
                     diskUsage = `${parts[2]} used of ${parts[1]} (${parts[4]})`
                 }
-            } catch {}
+            } catch { /* ignore */ }
 
             // Temperature
             let temp = 'N/A'
             try {
                 const { stdout } = await execAsync('sensors | grep -E "Package id 0|temp1" | head -n1')
                 temp = stdout.split(':')[1]?.trim() || 'N/A'
-            } catch {}
+            } catch { /* ignore */ }
 
             // Power usage
             let power = 'N/A'
             try {
                 const { stdout } = await execAsync('cat /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj')
                 power = `${Number(stdout.trim()) / 1_000_000} J`
-            } catch {}
+            } catch { /* ignore */ }
 
             // Processes
             const { stdout: psOut } = await execAsync('ps -e --no-headers | wc -l')
@@ -93,7 +91,7 @@ export default function followServerStats(connection: WebSocket) {
         }
     }
 
-    interval = setInterval(sendStats, SEND_INTERVAL)
+    const interval = setInterval(sendStats, SEND_INTERVAL)
     sendStats()
 
     connection.on('close', () => {

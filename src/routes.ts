@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyPluginOptions } from "fastify"
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify'
 import getIndex from './handlers/index/get.ts'
 import getDockerContainers from './handlers/docker/get.ts'
 import restartHandler from './handlers/docker/restart.ts'

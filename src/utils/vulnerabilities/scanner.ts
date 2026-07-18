@@ -13,11 +13,15 @@ export async function scanImage(image: string): Promise<ImageVulnerabilityReport
             severity,
             groups: buildGroups(vulnerabilities),
             vulnerabilities,
-            scannerResults: [{ scanner: 'docker_scout', scannedAt, totalVulnerabilities: vulnerabilities.length, severity, scanError: null, summaryOnly: false, note: null }],
+            scannerResults: [{
+                scanner: 'docker_scout', scannedAt,
+                totalVulnerabilities: vulnerabilities.length, severity,
+                scanError: null, summaryOnly: false, note: null,
+            }],
             scanError: null,
         }
-    } catch (err: any) {
-        const scanError = String(err?.message || err)
+    } catch (err: unknown) {
+        const scanError = err instanceof Error ? err.message : String(err)
         const severity = emptySeverity()
         return {
             image,
@@ -26,7 +30,11 @@ export async function scanImage(image: string): Promise<ImageVulnerabilityReport
             severity,
             groups: [],
             vulnerabilities: [],
-            scannerResults: [{ scanner: 'docker_scout', scannedAt, totalVulnerabilities: 0, severity, scanError, summaryOnly: false, note: null }],
+            scannerResults: [{
+                scanner: 'docker_scout', scannedAt,
+                totalVulnerabilities: 0, severity,
+                scanError, summaryOnly: false, note: null,
+            }],
             scanError,
         }
     }
@@ -75,42 +83,49 @@ function parseSarif(raw: string): VulnerabilityDetail[] {
     const start = trimmed.indexOf('{')
     if (start < 0) return []
 
-    const sarif = JSON.parse(trimmed.slice(start))
-    const runs: any[] = Array.isArray(sarif?.runs) ? sarif.runs : []
+    type O = Record<string, unknown>
+    const sarif = JSON.parse(trimmed.slice(start)) as O
+    const runs: O[] = Array.isArray(sarif?.runs) ? sarif.runs as O[] : []
 
     const details = runs.flatMap(run => {
-        const rules = new Map<string, any>(
-            (run?.tool?.driver?.rules ?? []).map((r: any) => [r.id, r])
+        const rules = new Map<string, O>(
+            ((run?.tool as O)?.driver as O)?.rules
+                ? (((run?.tool as O)?.driver as O)?.rules as O[]).map((r: O) => [r.id as string, r])
+                : []
         )
-        return (run?.results ?? []).map((result: any) => toDetail(result, rules.get(result?.ruleId)))
+        return ((run?.results ?? []) as O[]).map((result: O) => toDetail(result, rules.get(result?.ruleId as string)))
     }).filter(Boolean) as VulnerabilityDetail[]
 
     const SEVERITY_ORDER: SeverityLevel[] = ['critical', 'high', 'medium', 'low', 'unknown']
     return details.sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
 }
 
-function toDetail(result: any, rule: any): VulnerabilityDetail | null {
+function toDetail(result: Record<string, unknown>, rule: Record<string, unknown> | undefined): VulnerabilityDetail | null {
     if (!result && !rule) return null
 
-    const props = rule?.properties ?? {}
-    const purl: string | null = Array.isArray(props.purls) ? props.purls[0] ?? null : null
+    type O = Record<string, unknown>
+    const props = (rule?.properties as O) ?? {}
+    const purl: string | null = Array.isArray(props.purls) ? (props.purls as unknown[])[0] as string ?? null : null
     const pkg = parsePurl(purl)
 
     const severity = normalizeSeverity(
         props.cvssV3_severity
-        ?? (Array.isArray(props.tags) ? props.tags.find((t: any) => typeof t === 'string') : null)
+        ?? (Array.isArray(props.tags) ? (props.tags as unknown[]).find((t) => typeof t === 'string') : null)
     )
 
     return {
         id: String(result?.ruleId ?? rule?.id ?? 'unknown'),
-        title: String(rule?.shortDescription?.text ?? rule?.name ?? result?.ruleId ?? 'Unknown vulnerability'),
+        title: String((rule?.shortDescription as O)?.text ?? rule?.name ?? result?.ruleId ?? 'Unknown vulnerability'),
         severity,
         source: String(pkg?.type ?? 'unknown'),
         packageName: pkg?.name ?? null,
         packageType: pkg?.type ?? null,
         installedVersion: pkg?.version ?? null,
-        fixedVersion: props.fixed_version ?? null,
-        description: result?.message?.text ?? rule?.help?.markdown ?? rule?.help?.text ?? null,
+        fixedVersion: props.fixed_version as string ?? null,
+        description: (result?.message as O)?.text as string
+            ?? (rule?.help as O)?.markdown as string
+            ?? (rule?.help as O)?.text as string
+            ?? null,
         references: rule?.helpUri ? [String(rule.helpUri)] : [],
         scanners: ['docker_scout'],
     }

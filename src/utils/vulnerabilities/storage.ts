@@ -25,7 +25,8 @@ export async function loadReport(): Promise<VulnerabilityReportFile> {
         scanner_results: VulnerabilityScannerResult[]
         scan_error: string | null
     }>(
-        'SELECT image, scanned_at, total_vulnerabilities, severity, groups, vulnerabilities, scanner_results, scan_error FROM vulnerability_report_images ORDER BY total_vulnerabilities DESC, image ASC'
+        'SELECT image, scanned_at, total_vulnerabilities, severity, groups, vulnerabilities, scanner_results, scan_error'
+        + ' FROM vulnerability_report_images ORDER BY total_vulnerabilities DESC, image ASC'
     )
 
     const images = rows.map(r => ({
@@ -108,7 +109,9 @@ export async function loadScanStatus(): Promise<DockerScoutScanStatus> {
         completed_images: number
         current_image: string | null
         estimated_completion_at: string | null
-    }>('SELECT is_running, started_at, finished_at, last_success_at, last_error, total_images, completed_images, current_image, estimated_completion_at FROM vulnerability_scan_status WHERE id = 1')
+    }>('SELECT is_running, started_at, finished_at, last_success_at, last_error,'
+        + ' total_images, completed_images, current_image, estimated_completion_at'
+        + ' FROM vulnerability_scan_status WHERE id = 1')
 
     if (!row) return { ...EMPTY_STATUS }
 
@@ -129,7 +132,8 @@ export async function saveScanStatus(status: DockerScoutScanStatus) {
     await ensureInternalSchema()
     await query(`
         INSERT INTO vulnerability_scan_status
-            (id, is_running, started_at, finished_at, last_success_at, last_error, total_images, completed_images, current_image, estimated_completion_at, updated_at)
+            (id, is_running, started_at, finished_at, last_success_at, last_error,
+            total_images, completed_images, current_image, estimated_completion_at, updated_at)
         VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, now())
         ON CONFLICT (id) DO UPDATE SET
             is_running = EXCLUDED.is_running, started_at = EXCLUDED.started_at,

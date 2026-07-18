@@ -97,7 +97,8 @@ export default function parseLogLine(line: string) {
             }
         }
 
-        const journalMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2}))\s+\S+\s+([^:]+):\s*(.*)$/)
+        const JOURNAL_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2}))\s+\S+\s+([^:]+):\s*(.*)$/
+        const journalMatch = trimmed.match(JOURNAL_RE)
         if (journalMatch) {
             const [, rawTimestamp, source, message] = journalMatch
             const level = inferLevel(message, source)

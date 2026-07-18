@@ -52,12 +52,12 @@ fastify.register(cors, {
 const port = Number(process.env.PORT) || 8001
 
 fastify.decorate('favicon', fs.readFileSync(path.join(process.cwd(), 'public', 'favicon.ico')))
-fastify.register(ws, { prefix: "/api" })
+fastify.register(ws, { prefix: '/api' })
 fastify.register(backupScheduler)
 fastify.register(logAlertScheduler)
 fastify.register(vulnerabilityScheduler)
 fastify.register(scouterBee)
-fastify.register(routes, { prefix: "/api" })
+fastify.register(routes, { prefix: '/api' })
 fastify.get('/', getIndex)
 fastify.get('/favicon.ico', getFavicon)
 

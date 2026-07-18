@@ -26,7 +26,7 @@ export default async function getServerStats(_: FastifyRequest, res: FastifyRepl
             if (totalSwap > 0) {
                 swapPercent = (((totalSwap - freeSwap) / totalSwap) * 100).toFixed(2)
             } else swapPercent = '0'
-        } catch {}
+        } catch { /* ignore */ }
 
         // Disk usage
         let diskUsage = 'N/A'
@@ -37,21 +37,21 @@ export default async function getServerStats(_: FastifyRequest, res: FastifyRepl
                 const parts = lines[1].split(/\s+/)
                 diskUsage = `${parts[2]} used of ${parts[1]} (${parts[4]})`
             }
-        } catch {}
+        } catch { /* ignore */ }
 
         // Temperature
         let temp = 'N/A'
         try {
             const { stdout } = await execAsync('sensors | grep -E "Package id 0|temp1" | head -n1')
             temp = stdout.split(':')[1]?.trim() || 'N/A'
-        } catch {}
+        } catch { /* ignore */ }
 
         // Current power usage
         let power = 'N/A'
         try {
             const { stdout } = await execAsync('cat /sys/class/powercap/intel-rapl/intel-rapl:0/energy_uj')
             power = `${Number(stdout.trim()) / 1_000_000} J`
-        } catch {}
+        } catch { /* ignore */ }
 
         // Network IPs
         const networkInterfaces = os.networkInterfaces()

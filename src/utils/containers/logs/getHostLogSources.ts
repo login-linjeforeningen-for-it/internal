@@ -33,7 +33,10 @@ export default async function getHostLogSources({
     const sshAttemptsLog = [authLog, syslog]
         .filter(Boolean)
         .flatMap(content => content.split('\n'))
-        .filter(line => /sshd|Failed password|Invalid user|authentication failure|Disconnected from invalid user|Did not receive identification string/i.test(line))
+        .filter(line =>
+            /sshd|Failed password|Invalid user|authentication failure|Disconnected from invalid user|Did not receive identification string/i
+                .test(line)
+        )
         .join('\n')
 
     const [journal, sshJournal, dockerJournal, kernelJournal, fail2banJournal] = await Promise.all([

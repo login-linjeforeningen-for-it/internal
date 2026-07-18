@@ -35,11 +35,16 @@ function resolveRepoPath(id: string) {
 }
 
 const defaultTargets: DeployTarget[] = [
-    { id: 'beehive', name: 'Beehive', repoPath: resolveRepoPath('beehive'), branch: 'main', composeCommand: 'docker compose up -d --build' },
-    { id: 'beekeeper', name: 'Beekeeper', repoPath: resolveRepoPath('beekeeper'), branch: 'main', composeCommand: 'docker compose up -d --build' },
-    { id: 'queenbee', name: 'Queenbee', repoPath: resolveRepoPath('queenbee'), branch: 'main', composeCommand: 'docker compose up -d --build' },
-    { id: 'workerbee', name: 'Workerbee', repoPath: resolveRepoPath('workerbee'), branch: 'main', composeCommand: 'docker compose up -d --build' },
-    { id: 'internal', name: 'Internal', repoPath: resolveRepoPath('internal'), branch: 'main', composeCommand: 'docker compose up -d --build' },
+    { id: 'beehive', name: 'Beehive', repoPath: resolveRepoPath('beehive'),
+        branch: 'main', composeCommand: 'docker compose up -d --build' },
+    { id: 'beekeeper', name: 'Beekeeper', repoPath: resolveRepoPath('beekeeper'),
+        branch: 'main', composeCommand: 'docker compose up -d --build' },
+    { id: 'queenbee', name: 'Queenbee', repoPath: resolveRepoPath('queenbee'),
+        branch: 'main', composeCommand: 'docker compose up -d --build' },
+    { id: 'workerbee', name: 'Workerbee', repoPath: resolveRepoPath('workerbee'),
+        branch: 'main', composeCommand: 'docker compose up -d --build' },
+    { id: 'internal', name: 'Internal', repoPath: resolveRepoPath('internal'),
+        branch: 'main', composeCommand: 'docker compose up -d --build' },
 ]
 
 export default defaultTargets

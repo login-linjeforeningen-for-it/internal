@@ -34,7 +34,7 @@ services:
             S3_SECRET_KEY: ${S3_SECRET_KEY:-local}
             TZ: Europe/Oslo
         volumes:
-            - ${HOME}/.docker:/root/.docker
+            - ${HOME}/.docker:/home/app/.docker
             - /var/run/docker.sock:/var/run/docker.sock
             - internal_data:/app/data
             - /backups:/backups
@@ -55,12 +55,15 @@ services:
         environment:
             POSTGRES_DB: ${DB:-internal}
             POSTGRES_USER: ${DB_USER:-internal}
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
         volumes:
             - internal_database:/var/lib/postgresql
         healthcheck:
             test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-internal} -d ${DB:-internal}"]
             interval: 5s
+            timeout: 5s
             retries: 5
+            start_period: 10s
         mem_limit: 1g
         cpus: "2.0"
 

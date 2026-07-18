@@ -6,11 +6,11 @@ const AGE_BINARY = process.env.BACKUP_AGE_BINARY || 'age'
 type RunAgeResult = { stdout: string; stderr: string; code: number }
 
 async function runAge(args: string[]): Promise<RunAgeResult> {
-    let proc: any
+    let proc: ReturnType<typeof Bun.spawn> | undefined
     try {
         proc = Bun.spawn([AGE_BINARY, ...args])
     } catch (err) {
-        throw new Error(`failed to spawn ${AGE_BINARY}: ${String(err)}`)
+        throw new Error(`failed to spawn ${AGE_BINARY}: ${String(err)}`, { cause: err })
     }
 
     const stdoutPromise = new Response(proc.stdout).text()
@@ -18,7 +18,8 @@ async function runAge(args: string[]): Promise<RunAgeResult> {
     const [stdout, stderr, code] = await Promise.all([stdoutPromise, stderrPromise, proc.exited])
 
     if (code !== 0) {
-        const err = new Error((stderr || `age exited with code ${code}`).trim()) as Error & { code?: number; stdout?: string; stderr?: string }
+        const errMsg = (stderr || `age exited with code ${code}`).trim()
+        const err = new Error(errMsg) as Error & { code?: number; stdout?: string; stderr?: string }
         err.code = code
         err.stdout = stdout
         err.stderr = stderr
@@ -32,7 +33,7 @@ export async function encryptBackupFile(filePath: string): Promise<string> {
     const source = Bun.file(filePath)
     if (!(await source.exists())) throw new Error('Source file does not exist')
     if (filePath.endsWith('.age')) throw new Error('File already appears to be encrypted')
-        
+
     const publicKey = config.backup.encryption.publicKey
     if (!publicKey) throw new Error('No age public key configured for backup encryption')
 
@@ -48,7 +49,7 @@ export async function encryptBackupFile(filePath: string): Promise<string> {
 
         try {
             await fs.rename(tempPath, encryptedPath)
-        } catch (error: any) {
+        } catch (error: unknown) {
             if (error?.code === 'EEXIST') {
                 await fs.unlink(encryptedPath)
                 await fs.rename(tempPath, encryptedPath)

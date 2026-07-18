@@ -58,7 +58,8 @@ export async function runBackup() {
             const stamp = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Oslo' }).replace(/\D/g, '')
             tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tekkom-backup-'))
             const file = path.join(tempDir, `${DB}_${stamp}.dump`)
-            const command = `docker exec -e PGPASSWORD=${shellEscape(DB_PASSWORD)} ${shellEscape(id)} pg_dump -Fc -c -U ${shellEscape(DB_USER)} ${shellEscape(DB)} > ${shellEscape(file)}`
+            const command = `docker exec -e PGPASSWORD=${shellEscape(DB_PASSWORD)} ${shellEscape(id)}`
+                + ` pg_dump -Fc -c -U ${shellEscape(DB_USER)} ${shellEscape(DB)} > ${shellEscape(file)}`
             await execAsync(command)
 
             if ((await fs.stat(file)).size === 0) {
@@ -75,8 +76,9 @@ export async function runBackup() {
                     await uploadBackupToS3(s3, key, encryptedFile)
                     uploaded = true
                     console.log(`\tUploaded to ${label} S3: ${key}`)
-                } catch (e: any) {
-                    const error = `${label[0].toUpperCase()}${label.slice(1)} S3 upload failed: ${e.message || e}`
+                } catch (e: unknown) {
+                    const msg = e instanceof Error ? e.message : String(e)
+                    const error = `${label[0].toUpperCase()}${label.slice(1)} S3 upload failed: ${msg}`
                     uploadErrors.push(error)
                     console.error(`\t${error}`)
                 }
@@ -89,8 +91,8 @@ export async function runBackup() {
 
             result.files.push(key)
             result.backedUp += 1
-        } catch (e: any) {
-            const error = e.message || String(e)
+        } catch (e: unknown) {
+            const error = e instanceof Error ? e.message : String(e)
             result.failures.push({ container: name, error })
             console.error(`\tFailed ${name}:`, error)
         } finally {

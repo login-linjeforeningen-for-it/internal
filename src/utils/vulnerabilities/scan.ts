@@ -38,7 +38,7 @@ export function triggerScan(): { started: boolean; status: DockerScoutScanStatus
 
     activeScan = runScan()
         .then(() => { status.lastSuccessAt = status.finishedAt })
-        .catch((err: any) => { status.lastError = String(err?.message || err) })
+        .catch((err: unknown) => { status.lastError = err instanceof Error ? err.message : String(err) })
         .finally(() => {
             Object.assign(status, { isRunning: false, finishedAt: new Date().toISOString(), currentImage: null })
             persist()

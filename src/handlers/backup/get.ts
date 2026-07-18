@@ -42,7 +42,7 @@ export default async function getBackupStats(_: FastifyRequest, res: FastifyRepl
             try {
                 ({ DB: database } = await getContainerCredentials({ id: container.id, workingDir: container.workingDir }))
                 if (!container.status.startsWith('Up')) info.error = 'Container not running'
-            } catch { }
+            } catch { /* ignore */ }
 
             return { ...info, database, ...storage }
         }))
